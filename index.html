@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Peptide Tracker">
+  <meta name="theme-color" content="#0a0a0a">
+  <title>Peptide Tracker</title>
+  <link rel="manifest" href="/manifest.json">
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --card: #1a1a1a;
+      --border: #2a2a2a;
+      --primary: #6366f1;
+      --primary-dark: #4f46e5;
+      --text: #ffffff;
+      --subtext: #9ca3af;
+      --success: #10b981;
+      --danger: #ef4444;
+      --safe-top: env(safe-area-inset-top);
+      --safe-bottom: env(safe-area-inset-bottom);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* AUTH */
+    #auth-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+    .auth-logo { font-size: 3.5rem; margin-bottom: 0.5rem; }
+    .auth-title { font-size: 1.75rem; font-weight: 800; margin-bottom: 0.25rem; letter-spacing: -0.02em; }
+    .auth-subtitle { color: var(--subtext); font-size: 0.9rem; margin-bottom: 2.5rem; }
+    .auth-form { width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 1rem; }
+    .form-group { display: flex; flex-direction: column; gap: 0.375rem; }
+    label { font-size: 0.8rem; color: var(--subtext); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
+
+    input[type="email"], input[type="password"], input[type="text"],
+    input[type="number"], input[type="datetime-local"], select, textarea {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      font-size: 1rem;
+      padding: 0.8rem 1rem;
+      width: 100%;
+      outline: none;
+      transition: border-color 0.2s;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--primary); }
+    select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239ca3af' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 2rem; }
+    select option { background: #1a1a1a; }
+    textarea { resize: none; font-family: inherit; }
+    input[type="datetime-local"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.5; }
+
+    .btn {
+      background: var(--primary);
+      border: none;
+      border-radius: 14px;
+      color: white;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 600;
+      padding: 0.9rem;
+      width: 100%;
+      transition: opacity 0.15s, transform 0.1s;
+      font-family: inherit;
+    }
+    .btn:active { transform: scale(0.97); opacity: 0.85; }
+    .btn:disabled { opacity: 0.5; pointer-events: none; }
+    .btn-secondary { background: var(--card); border: 1px solid var(--border); color: var(--text); }
+    .btn-danger { background: var(--danger); }
+    .btn-sm { padding: 0.5rem 1rem; font-size: 0.875rem; width: auto; border-radius: 10px; }
+
+    .auth-toggle { text-align: center; color: var(--subtext); font-size: 0.875rem; }
+    .auth-toggle span { color: var(--primary); cursor: pointer; font-weight: 600; }
+    .error-msg { color: var(--danger); font-size: 0.875rem; text-align: center; }
+    .success-msg { color: var(--success); font-size: 0.875rem; text-align: center; }
+
+    /* APP */
+    #app {
+      display: none;
+      flex-direction: column;
+      min-height: 100vh;
+      padding-bottom: calc(64px + var(--safe-bottom));
+    }
+
+    .tab-page { display: none; }
+    .tab-page.active { display: block; }
+
+    .page-header {
+      padding: calc(var(--safe-top) + 1.25rem) 1.25rem 0.75rem;
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      z-index: 10;
+    }
+    .page-header h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.02em; }
+    .page-header .subtitle { color: var(--subtext); font-size: 0.875rem; margin-top: 0.125rem; }
+    .header-row { display: flex; align-items: center; justify-content: space-between; }
+
+    .tab-content { padding: 0.25rem 1.25rem 1.25rem; }
+
+    /* BOTTOM NAV */
+    #bottom-nav {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: rgba(15,15,15,0.95);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-top: 1px solid var(--border);
+      display: flex;
+      padding-bottom: var(--safe-bottom);
+      z-index: 100;
+    }
+    .nav-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0.625rem 0;
+      cursor: pointer;
+      color: #555;
+      transition: color 0.2s;
+      border: none;
+      background: none;
+      font-family: inherit;
+    }
+    .nav-item.active { color: var(--primary); }
+    .nav-icon { font-size: 1.375rem; line-height: 1; }
+    .nav-label { font-size: 0.625rem; margin-top: 0.25rem; font-weight: 600; letter-spacing: 0.02em; }
+
+    /* FAB */
+    .fab {
+      position: fixed;
+      bottom: calc(76px + var(--safe-bottom));
+      right: 1.25rem;
+      background: var(--primary);
+      border: none;
+      border-radius: 50%;
+      color: white;
+      cursor: pointer;
+      font-size: 1.75rem;
+      height: 58px;
+      width: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 24px rgba(99,102,241,0.45);
+      z-index: 50;
+      transition: transform 0.2s;
+      font-family: inherit;
+    }
+    .fab:active { transform: scale(0.9); }
+
+    /* CARDS */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .card-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+    .card-left { flex: 1; min-width: 0; }
+    .card-title { font-weight: 600; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .card-sub { color: var(--subtext); font-size: 0.8125rem; margin-top: 0.2rem; }
+    .badge {
+      background: rgba(99,102,241,0.2);
+      border: 1px solid rgba(99,102,241,0.3);
+      border-radius: 10px;
+      color: #a5b4fc;
+      font-size: 0.8125rem;
+      font-weight: 700;
+      padding: 0.3rem 0.7rem;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* STATS */
+    .stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1rem;
+      text-align: center;
+    }
+    .stat-number { font-size: 2rem; font-weight: 800; color: var(--primary); letter-spacing: -0.02em; }
+    .stat-label { color: var(--subtext); font-size: 0.75rem; margin-top: 0.25rem; font-weight: 500; }
+
+    /* DATE GROUP */
+    .date-group-label {
+      color: var(--subtext);
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin: 1.25rem 0 0.5rem;
+    }
+    .date-group-label:first-child { margin-top: 0; }
+
+    /* MODAL */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 200;
+      display: none;
+      align-items: flex-end;
+      animation: fadeIn 0.15s ease;
+    }
+    .modal-overlay.open { display: flex; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .modal-sheet {
+      background: #141414;
+      border-radius: 24px 24px 0 0;
+      border-top: 1px solid var(--border);
+      padding: 1.25rem;
+      padding-bottom: calc(1.5rem + var(--safe-bottom));
+      width: 100%;
+      max-height: 92vh;
+      overflow-y: auto;
+      animation: slideUp 0.25s ease;
+    }
+    @keyframes slideUp { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .modal-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 1.5rem; }
+    .modal-title { font-size: 1.2rem; font-weight: 800; margin-bottom: 1.25rem; letter-spacing: -0.01em; }
+    .modal-form { display: flex; flex-direction: column; gap: 1rem; }
+    .modal-actions { display: flex; gap: 0.75rem; margin-top: 0.25rem; }
+    .input-row { display: flex; gap: 0.5rem; }
+    .input-row input { flex: 1; }
+    .input-row select { width: 95px; flex-shrink: 0; }
+
+    /* PEPTIDE TAG */
+    .peptide-pill {
+      display: inline-block;
+      background: rgba(99,102,241,0.12);
+      border: 1px solid rgba(99,102,241,0.25);
+      border-radius: 999px;
+      color: #a5b4fc;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.2rem 0.6rem;
+      margin-top: 0.4rem;
+    }
+
+    /* INACTIVE TAG */
+    .inactive-tag {
+      font-size: 0.65rem;
+      color: var(--subtext);
+      background: #2a2a2a;
+      border-radius: 5px;
+      padding: 0.1rem 0.4rem;
+      margin-left: 0.4rem;
+      vertical-align: middle;
+    }
+
+    /* ACTION BUTTONS */
+    .action-btns { display: flex; gap: 0.25rem; align-items: center; flex-shrink: 0; }
+    .action-btn {
+      background: none;
+      border: none;
+      color: var(--subtext);
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 0.35rem 0.5rem;
+      border-radius: 8px;
+      transition: background 0.15s;
+      font-family: inherit;
+    }
+    .action-btn:active { background: var(--border); }
+    .action-btn.danger { color: #f87171; }
+
+    /* EMPTY STATE */
+    .empty-state { text-align: center; padding: 3rem 1rem; color: var(--subtext); }
+    .empty-icon { font-size: 3rem; margin-bottom: 0.75rem; }
+    .empty-state h3 { color: var(--text); font-size: 1.125rem; margin-bottom: 0.5rem; font-weight: 700; }
+
+    /* LOADING */
+    .loading { text-align: center; padding: 2rem; color: var(--subtext); font-size: 0.9rem; }
+
+    /* SECTION HEADER */
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+    .section-title { font-size: 1rem; font-weight: 700; }
+
+    /* FILTER */
+    #history-filter { font-size: 0.8rem; padding: 0.45rem 2rem 0.45rem 0.75rem; width: auto; }
+
+    /* PROFILE */
+    .profile-info { color: var(--subtext); font-size: 0.75rem; text-align: center; margin-top: 2rem; line-height: 1.6; }
+  </style>
+</head>
+<body>
+
+<!-- ===== AUTH SCREEN ===== -->
+<div id="auth-screen">
+  <div class="auth-logo">💉</div>
+  <div class="auth-title">Peptide Tracker</div>
+  <div class="auth-subtitle">Track your peptide protocols</div>
+  <form class="auth-form" id="auth-form" autocomplete="on">
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="auth-email" placeholder="you@example.com" autocomplete="email" required>
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="auth-password" placeholder="••••••••" autocomplete="current-password" required>
+    </div>
+    <div id="auth-message" style="display:none"></div>
+    <button type="submit" class="btn" id="auth-btn">Sign In</button>
+    <div class="auth-toggle">
+      Don't have an account? <span id="auth-toggle-link">Sign up</span>
+    </div>
+  </form>
+</div>
+
+<!-- ===== MAIN APP ===== -->
+<div id="app">
+
+  <!-- LOG TAB -->
+  <div id="tab-log" class="tab-page active">
+    <div class="page-header">
+      <h1>Today</h1>
+      <div class="subtitle" id="today-date"></div>
+    </div>
+    <div class="tab-content">
+      <div class="stats-row" id="stats-row">
+        <div class="stat-card"><div class="stat-number" id="stat-doses">—</div><div class="stat-label">Doses Today</div></div>
+        <div class="stat-card"><div class="stat-number" id="stat-peptides">—</div><div class="stat-label">Peptides</div></div>
+      </div>
+      <div id="today-logs"></div>
+    </div>
+  </div>
+
+  <!-- HISTORY TAB -->
+  <div id="tab-history" class="tab-page">
+    <div class="page-header">
+      <div class="header-row">
+        <div><h1>History</h1><div class="subtitle">All dose logs</div></div>
+        <select id="history-filter"><option value="">All peptides</option></select>
+      </div>
+    </div>
+    <div class="tab-content" id="history-content"></div>
+  </div>
+
+  <!-- PEPTIDES TAB -->
+  <div id="tab-peptides" class="tab-page">
+    <div class="page-header">
+      <div class="header-row">
+        <div><h1>Peptides</h1><div class="subtitle">Your protocol</div></div>
+        <button class="btn btn-sm" onclick="openAddPeptide()">+ Add</button>
+      </div>
+    </div>
+    <div class="tab-content" id="peptides-content"></div>
+  </div>
+
+  <!-- PROFILE TAB -->
+  <div id="tab-profile" class="tab-page">
+    <div class="page-header"><h1>Profile</h1></div>
+    <div class="tab-content">
+      <div class="card">
+        <div class="card-sub">Signed in as</div>
+        <div class="card-title" id="profile-email" style="margin-top:0.25rem; font-size:0.95rem;"></div>
+      </div>
+      <button class="btn btn-secondary" id="signout-btn" style="margin-top:0.5rem">Sign Out</button>
+      <div class="profile-info">Peptide Tracker v1.0<br>Data stored securely in Supabase<br>Built with ❤️ on Vercel</div>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <nav id="bottom-nav">
+    <button class="nav-item active" data-tab="log"><span class="nav-icon">🏠</span><span class="nav-label">Today</span></button>
+    <button class="nav-item" data-tab="history"><span class="nav-icon">📋</span><span class="nav-label">History</span></button>
+    <button class="nav-item" data-tab="peptides"><span class="nav-icon">💊</span><span class="nav-label">Peptides</span></button>
+    <button class="nav-item" data-tab="profile"><span class="nav-icon">👤</span><span class="nav-label">Profile</span></button>
+  </nav>
+
+  <!-- FAB -->
+  <button class="fab" id="fab-log" title="Log dose">＋</button>
+</div>
+
+<!-- ===== MODAL: LOG DOSE ===== -->
+<div class="modal-overlay" id="modal-log">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Log a Dose</div>
+    <div class="modal-form">
+      <div class="form-group">
+        <label>Peptide</label>
+        <select id="log-peptide-select"></select>
+      </div>
+      <div class="form-group">
+        <label>Amount</label>
+        <div class="input-row">
+          <input type="number" id="log-dose-amount" placeholder="250" step="any" min="0">
+          <select id="log-dose-unit">
+            <option>mcg</option><option>mg</option><option>IU</option><option>ml</option><option>units</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Date &amp; Time</label>
+        <input type="datetime-local" id="log-datetime">
+      </div>
+      <div class="form-group">
+        <label>Notes (optional)</label>
+        <textarea id="log-notes" rows="2" placeholder="Injection site, how you felt..."></textarea>
+      </div>
+      <div id="log-error" class="error-msg" style="display:none"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="log-cancel">Cancel</button>
+        <button class="btn" id="log-save" style="flex:1">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: ADD/EDIT PEPTIDE ===== -->
+<div class="modal-overlay" id="modal-peptide">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="peptide-modal-title">Add Peptide</div>
+    <div class="modal-form">
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" id="peptide-name" placeholder="e.g. BPC-157">
+      </div>
+      <div class="form-group">
+        <label>Description (optional)</label>
+        <input type="text" id="peptide-desc" placeholder="e.g. Gut healing, recovery">
+      </div>
+      <div class="form-group">
+        <label>Typical Dose (optional)</label>
+        <div class="input-row">
+          <input type="number" id="peptide-typical-dose" placeholder="250" step="any" min="0">
+          <select id="peptide-unit">
+            <option>mcg</option><option>mg</option><option>IU</option><option>ml</option><option>units</option>
+          </select>
+        </div>
+      </div>
+      <div id="peptide-error" class="error-msg" style="display:none"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="peptide-cancel">Cancel</button>
+        <button class="btn" id="peptide-save" style="flex:1">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'
+
+  const SUPABASE_URL = 'https://dkahofademdpompfdvop.supabase.co'
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRrYWhvZmFkZW1kcG9tcGZkdm9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4OTg3MDUsImV4cCI6MjA4NzQ3NDcwNX0.MnTIXOJC9c5HKBnQTdiqJjsIFuY5W1m_yE40HemUw68'
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+
+  let currentUser = null
+  let peptides = []
+  let isSignUp = false
+  let editingPeptideId = null
+  let currentTab = 'log'
+
+  // ==================== AUTH ====================
+  const authScreen = document.getElementById('auth-screen')
+  const appEl = document.getElementById('app')
+
+  document.getElementById('auth-toggle-link').addEventListener('click', () => {
+    isSignUp = !isSignUp
+    const btn = document.getElementById('auth-btn')
+    const toggle = document.getElementById('auth-toggle-link')
+    const wrapper = toggle.closest('.auth-toggle')
+    btn.textContent = isSignUp ? 'Create Account' : 'Sign In'
+    wrapper.innerHTML = isSignUp
+      ? `Already have an account? <span id="auth-toggle-link">Sign in</span>`
+      : `Don't have an account? <span id="auth-toggle-link">Sign up</span>`
+    wrapper.querySelector('span').addEventListener('click', () => {
+      isSignUp = !isSignUp
+      const btn2 = document.getElementById('auth-btn')
+      btn2.textContent = isSignUp ? 'Create Account' : 'Sign In'
+      wrapper.innerHTML = isSignUp
+        ? `Already have an account? <span id="auth-toggle-link">Sign in</span>`
+        : `Don't have an account? <span id="auth-toggle-link">Sign up</span>`
+      wrapper.querySelector('span').onclick = null
+    })
+    setAuthMessage('', '')
+  })
+
+  document.getElementById('auth-form').addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const btn = document.getElementById('auth-btn')
+    const email = document.getElementById('auth-email').value.trim()
+    const password = document.getElementById('auth-password').value
+    btn.disabled = true
+    btn.textContent = '...'
+    setAuthMessage('', '')
+
+    let result
+    if (isSignUp) {
+      result = await supabase.auth.signUp({ email, password })
+    } else {
+      result = await supabase.auth.signInWithPassword({ email, password })
+    }
+
+    if (result.error) {
+      setAuthMessage(result.error.message, 'error')
+    } else if (isSignUp && !result.data.session) {
+      setAuthMessage('Check your email to confirm your account!', 'success')
+    }
+    btn.disabled = false
+    btn.textContent = isSignUp ? 'Create Account' : 'Sign In'
+  })
+
+  document.getElementById('signout-btn').addEventListener('click', () => supabase.auth.signOut())
+
+  function setAuthMessage(msg, type) {
+    const el = document.getElementById('auth-message')
+    el.textContent = msg
+    el.className = type === 'error' ? 'error-msg' : 'success-msg'
+    el.style.display = msg ? 'block' : 'none'
+  }
+
+  // ==================== SESSION ====================
+  supabase.auth.onAuthStateChange(async (event, session) => {
+    if (session?.user) {
+      currentUser = session.user
+      document.getElementById('profile-email').textContent = currentUser.email
+      authScreen.style.display = 'none'
+      appEl.style.display = 'flex'
+      await loadPeptides()
+      renderLogTab()
+    } else {
+      currentUser = null
+      authScreen.style.display = 'flex'
+      appEl.style.display = 'none'
+    }
+  })
+
+  // ==================== NAVIGATION ====================
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.tab
+      document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'))
+      btn.classList.add('active')
+      document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'))
+      document.getElementById('tab-' + tab).classList.add('active')
+      const fab = document.getElementById('fab-log')
+      fab.style.display = (tab === 'log' || tab === 'history') ? 'flex' : 'none'
+      currentTab = tab
+      if (tab === 'history') renderHistory()
+      if (tab === 'peptides') renderPeptides()
+    })
+  })
+
+  // ==================== DATA ====================
+  async function loadPeptides() {
+    const { data } = await supabase.from('peptides').select('*').order('name')
+    peptides = data || []
+    updateSelects()
+  }
+
+  function updateSelects() {
+    const logSel = document.getElementById('log-peptide-select')
+    const histSel = document.getElementById('history-filter')
+    const activePeptides = peptides.filter(p => p.active)
+    logSel.innerHTML = activePeptides.length === 0
+      ? '<option value="">— Add a peptide first —</option>'
+      : activePeptides.map(p => `<option value="${p.id}" data-unit="${p.unit}">${p.name}</option>`).join('')
+    histSel.innerHTML = '<option value="">All peptides</option>' +
+      peptides.map(p => `<option value="${p.id}">${p.name}</option>`).join('')
+  }
+
+  // ==================== LOG TAB ====================
+  function renderLogTab() {
+    const now = new Date()
+    document.getElementById('today-date').textContent = now.toLocaleDateString('en-US', {
+      weekday: 'long', month: 'long', day: 'numeric'
+    })
+    loadTodayLogs()
+  }
+
+  async function loadTodayLogs() {
+    const today = new Date(); today.setHours(0,0,0,0)
+    const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1)
+    const { data } = await supabase
+      .from('dose_logs').select('*, peptides(name)')
+      .gte('logged_at', today.toISOString())
+      .lt('logged_at', tomorrow.toISOString())
+      .order('logged_at', { ascending: false })
+    const logs = data || []
+    const uniquePeptides = [...new Set(logs.map(l => l.peptide_id))].length
+    document.getElementById('stat-doses').textContent = logs.length
+    document.getElementById('stat-peptides').textContent = uniquePeptides
+    const container = document.getElementById('today-logs')
+    if (logs.length === 0) {
+      container.innerHTML = `<div class="empty-state"><div class="empty-icon">💉</div><h3>No doses today</h3><p>Tap + to log your first dose</p></div>`
+      return
+    }
+    container.innerHTML = logs.map(log => logCard(log, 'today')).join('')
+  }
+
+  function logCard(log, source) {
+    return `<div class="card"><div class="card-row">
+      <div class="card-left">
+        <div class="card-title">${escHtml(log.peptides?.name || 'Unknown')}</div>
+        <div class="card-sub">${formatTime(log.logged_at)}</div>
+        ${log.notes ? `<div class="card-sub" style="font-style:italic;margin-top:0.2rem">${escHtml(log.notes)}</div>` : ''}
+      </div>
+      <div class="action-btns">
+        <span class="badge">${log.dose_amount} ${escHtml(log.unit)}</span>
+        <button class="action-btn danger" onclick="window.deleteLog('${log.id}','${source}')">🗑</button>
+      </div>
+    </div></div>`
+  }
+
+  // ==================== HISTORY TAB ====================
+  async function renderHistory() {
+    const container = document.getElementById('history-content')
+    container.innerHTML = '<div class="loading">Loading...</div>'
+    const filterId = document.getElementById('history-filter').value
+    let query = supabase.from('dose_logs').select('*, peptides(name)')
+      .order('logged_at', { ascending: false }).limit(300)
+    if (filterId) query = query.eq('peptide_id', filterId)
+    const { data } = await query
+    const logs = data || []
+    if (logs.length === 0) {
+      container.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><h3>No logs yet</h3><p>Start logging doses to see history here</p></div>`
+      return
+    }
+    const groups = {}
+    logs.forEach(log => {
+      const key = new Date(log.logged_at).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+      if (!groups[key]) groups[key] = []
+      groups[key].push(log)
+    })
+    container.innerHTML = Object.entries(groups).map(([date, entries]) =>
+      `<div class="date-group-label">${date}</div>${entries.map(log => logCard(log, 'history')).join('')}`
+    ).join('')
+  }
+
+  document.getElementById('history-filter').addEventListener('change', renderHistory)
+
+  // ==================== PEPTIDES TAB ====================
+  async function renderPeptides() {
+    const container = document.getElementById('peptides-content')
+    if (peptides.length === 0) {
+      container.innerHTML = `<div class="empty-state"><div class="empty-icon">💊</div><h3>No peptides yet</h3><p>Tap + Add to get started</p></div>`
+      return
+    }
+    container.innerHTML = peptides.map(p => `
+      <div class="card"><div class="card-row">
+        <div class="card-left">
+          <div class="card-title">${escHtml(p.name)}${!p.active ? '<span class="inactive-tag">inactive</span>' : ''}</div>
+          ${p.description ? `<div class="card-sub">${escHtml(p.description)}</div>` : ''}
+          ${p.typical_dose ? `<span class="peptide-pill">${p.typical_dose} ${escHtml(p.unit)} typical</span>` : ''}
+        </div>
+        <div class="action-btns">
+          <button class="action-btn" onclick="window.openEditPeptide('${p.id}')">✏️</button>
+          <button class="action-btn danger" onclick="window.deletePeptide('${p.id}')">🗑</button>
+        </div>
+      </div></div>`
+    ).join('')
+  }
+
+  // ==================== LOG MODAL ====================
+  document.getElementById('fab-log').addEventListener('click', openLogModal)
+  document.getElementById('log-cancel').addEventListener('click', () => closeModal('modal-log'))
+  document.getElementById('modal-log').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal('modal-log') })
+
+  function openLogModal() {
+    if (!peptides.filter(p => p.active).length) {
+      alert('Add a peptide first before logging a dose.')
+      return
+    }
+    const now = new Date()
+    document.getElementById('log-datetime').value = new Date(now - now.getTimezoneOffset() * 60000).toISOString().slice(0,16)
+    document.getElementById('log-dose-amount').value = ''
+    document.getElementById('log-notes').value = ''
+    document.getElementById('log-error').style.display = 'none'
+    syncUnitFromPeptide()
+    openModal('modal-log')
+  }
+
+  function syncUnitFromPeptide() {
+    const sel = document.getElementById('log-peptide-select')
+    if (sel.options[sel.selectedIndex]) {
+      const unit = sel.options[sel.selectedIndex].dataset.unit || 'mcg'
+      document.getElementById('log-dose-unit').value = unit
+    }
+  }
+  document.getElementById('log-peptide-select').addEventListener('change', syncUnitFromPeptide)
+
+  document.getElementById('log-save').addEventListener('click', async () => {
+    const peptideId = document.getElementById('log-peptide-select').value
+    const amount = parseFloat(document.getElementById('log-dose-amount').value)
+    const unit = document.getElementById('log-dose-unit').value
+    const datetime = document.getElementById('log-datetime').value
+    const notes = document.getElementById('log-notes').value.trim()
+    if (!peptideId || !amount || !datetime) { showErr('log-error', 'Please fill in peptide, amount, and date.'); return }
+    const btn = document.getElementById('log-save')
+    btn.disabled = true; btn.textContent = 'Saving...'
+    const { error } = await supabase.from('dose_logs').insert({
+      user_id: currentUser.id, peptide_id: peptideId, dose_amount: amount,
+      unit, logged_at: new Date(datetime).toISOString(), notes: notes || null
+    })
+    btn.disabled = false; btn.textContent = 'Save'
+    if (error) { showErr('log-error', error.message) }
+    else { closeModal('modal-log'); loadTodayLogs(); if (currentTab === 'history') renderHistory() }
+  })
+
+  // ==================== PEPTIDE MODAL ====================
+  document.getElementById('peptide-cancel').addEventListener('click', () => closeModal('modal-peptide'))
+  document.getElementById('modal-peptide').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal('modal-peptide') })
+
+  window.openAddPeptide = function() {
+    editingPeptideId = null
+    document.getElementById('peptide-modal-title').textContent = 'Add Peptide'
+    document.getElementById('peptide-name').value = ''
+    document.getElementById('peptide-desc').value = ''
+    document.getElementById('peptide-typical-dose').value = ''
+    document.getElementById('peptide-unit').value = 'mcg'
+    document.getElementById('peptide-error').style.display = 'none'
+    openModal('modal-peptide')
+  }
+
+  window.openEditPeptide = function(id) {
+    const p = peptides.find(x => x.id === id); if (!p) return
+    editingPeptideId = id
+    document.getElementById('peptide-modal-title').textContent = 'Edit Peptide'
+    document.getElementById('peptide-name').value = p.name
+    document.getElementById('peptide-desc').value = p.description || ''
+    document.getElementById('peptide-typical-dose').value = p.typical_dose || ''
+    document.getElementById('peptide-unit').value = p.unit || 'mcg'
+    document.getElementById('peptide-error').style.display = 'none'
+    openModal('modal-peptide')
+  }
+
+  document.getElementById('peptide-save').addEventListener('click', async () => {
+    const name = document.getElementById('peptide-name').value.trim()
+    const description = document.getElementById('peptide-desc').value.trim()
+    const typical_dose = parseFloat(document.getElementById('peptide-typical-dose').value) || null
+    const unit = document.getElementById('peptide-unit').value
+    if (!name) { showErr('peptide-error', 'Peptide name is required.'); return }
+    const btn = document.getElementById('peptide-save')
+    btn.disabled = true; btn.textContent = 'Saving...'
+    let error
+    if (editingPeptideId) {
+      ({ error } = await supabase.from('peptides').update({ name, description: description || null, typical_dose, unit }).eq('id', editingPeptideId))
+    } else {
+      ({ error } = await supabase.from('peptides').insert({ user_id: currentUser.id, name, description: description || null, typical_dose, unit }))
+    }
+    btn.disabled = false; btn.textContent = 'Save'
+    if (error) { showErr('peptide-error', error.message) }
+    else { closeModal('modal-peptide'); await loadPeptides(); renderPeptides() }
+  })
+
+  // ==================== DELETE ====================
+  window.deleteLog = async function(id, source) {
+    if (!confirm('Delete this log entry?')) return
+    await supabase.from('dose_logs').delete().eq('id', id)
+    loadTodayLogs()
+    if (source === 'history') renderHistory()
+  }
+
+  window.deletePeptide = async function(id) {
+    if (!confirm('Delete this peptide? All associated logs will also be deleted.')) return
+    await supabase.from('peptides').delete().eq('id', id)
+    await loadPeptides()
+    renderPeptides()
+  }
+
+  // ==================== HELPERS ====================
+  function openModal(id) { document.getElementById(id).classList.add('open') }
+  function closeModal(id) { document.getElementById(id).classList.remove('open') }
+  function showErr(id, msg) { const el = document.getElementById(id); el.textContent = msg; el.style.display = 'block' }
+  function formatTime(iso) {
+    return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  }
+  function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+  }
+</script>
+</body>
+</html>
