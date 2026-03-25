@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1a1a2e">
+  <title>Admin — Simple Pep Tracker</title>
+  <style>
+    :root {
+      --bg: #0f0f1a;
+      --card: #1a1a2e;
+      --border: #2a2a3e;
+      --primary: #6C5CE7;
+      --accent: #00CEC9;
+      --text: #ffffff;
+      --subtext: #888DA7;
+      --danger: #ff6b6b;
+      --warning: #ffd93d;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    .gradient-text {
+      background: linear-gradient(135deg, #6C5CE7, #00CEC9);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* LAYOUT */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      background: rgba(15,15,26,0.95);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .topbar h1 { font-size: 1.25rem; font-weight: 800; }
+    .topbar-actions { display: flex; gap: 0.75rem; align-items: center; }
+    .back-link {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .container { max-width: 900px; margin: 0 auto; padding: 1.5rem; }
+
+    /* AUTH GATE */
+    #auth-gate {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 80vh;
+      text-align: center;
+      color: var(--subtext);
+    }
+    #auth-gate .icon { font-size: 3rem; margin-bottom: 1rem; }
+    #admin-content { display: none; }
+
+    /* STATS GRID */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1rem;
+      text-align: center;
+    }
+    .stat-num { font-size: 1.75rem; font-weight: 800; }
+    .stat-label { color: var(--subtext); font-size: 0.7rem; font-weight: 500; margin-top: 0.2rem; }
+
+    /* SECTION */
+    .section { margin-bottom: 2rem; }
+    .section-title { font-size: 1.1rem; font-weight: 800; margin-bottom: 1rem; letter-spacing: -0.01em; }
+
+    /* TABLE */
+    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table th {
+      text-align: left;
+      padding: 0.6rem 0.75rem;
+      font-size: 0.7rem;
+      color: var(--subtext);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border-bottom: 1px solid var(--border);
+    }
+    .data-table td {
+      padding: 0.75rem;
+      font-size: 0.85rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .data-table tr:hover td { background: rgba(108,92,231,0.05); }
+    .email-cell { font-weight: 600; }
+    .admin-badge {
+      display: inline-block;
+      background: rgba(108,92,231,0.2);
+      border: 1px solid rgba(108,92,231,0.3);
+      color: #a78bfa;
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 0.15rem 0.5rem;
+      border-radius: 6px;
+      margin-left: 0.4rem;
+    }
+    .date-cell { color: var(--subtext); font-size: 0.8rem; }
+
+    /* ACTION BTNS */
+    .tbl-actions { display: flex; gap: 0.4rem; }
+    .tbl-btn {
+      padding: 0.35rem 0.65rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--subtext);
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    .tbl-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .tbl-btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+    .tbl-btn.admin-toggle:hover { border-color: var(--warning); color: var(--warning); }
+
+    /* TIDES TABLE */
+    .tide-bar-wrap { display: flex; align-items: center; gap: 0.5rem; }
+    .tide-bar { height: 10px; border-radius: 5px; background: linear-gradient(90deg, #6C5CE7, #00CEC9); min-width: 8px; }
+    .tide-count { font-size: 0.8rem; color: var(--subtext); font-weight: 600; min-width: 25px; }
+
+    /* TOAST */
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--card);
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      padding: 0.75rem 1.5rem;
+      border-radius: 12px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      z-index: 999;
+      transition: transform 0.3s ease;
+      pointer-events: none;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+    .toast.error { border-color: var(--danger); color: var(--danger); }
+
+    /* RESPONSIVE */
+    @media (max-width: 600px) {
+      .data-table { font-size: 0.8rem; }
+      .data-table th, .data-table td { padding: 0.5rem; }
+      .hide-mobile { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1><span class="gradient-text">Admin Panel</span></h1>
+  <div class="topbar-actions">
+    <a href="/" class="back-link">← Back to App</a>
+    <span id="admin-email" style="color:var(--subtext);font-size:0.75rem"></span>
+  </div>
+</div>
+
+<!-- AUTH GATE -->
+<div id="auth-gate">
+  <div class="icon">🔒</div>
+  <h2 style="margin-bottom:0.5rem">Admin Access Required</h2>
+  <p>Checking permissions...</p>
+</div>
+
+<!-- ADMIN CONTENT -->
+<div id="admin-content">
+  <div class="container">
+
+    <!-- PLATFORM STATS -->
+    <div class="section">
+      <div class="section-title">Platform Overview</div>
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card"><div class="stat-num gradient-text" id="s-users">—</div><div class="stat-label">Users</div></div>
+        <div class="stat-card"><div class="stat-num" id="s-peptides" style="color:var(--accent)">—</div><div class="stat-label">Total Tides</div></div>
+        <div class="stat-card"><div class="stat-num" id="s-active" style="color:var(--accent)">—</div><div class="stat-label">Active Tides</div></div>
+        <div class="stat-card"><div class="stat-num gradient-text" id="s-doses">—</div><div class="stat-label">Total Doses</div></div>
+        <div class="stat-card"><div class="stat-num" id="s-taken" style="color:var(--accent)">—</div><div class="stat-label">Taken</div></div>
+        <div class="stat-card"><div class="stat-num" id="s-skipped" style="color:var(--danger)">—</div><div class="stat-label">Skipped</div></div>
+        <div class="stat-card"><div class="stat-num" id="s-today" style="color:var(--warning)">—</div><div class="stat-label">Today</div></div>
+      </div>
+    </div>
+
+    <!-- USERS -->
+    <div class="section">
+      <div class="section-title">Users</div>
+      <div style="overflow-x:auto">
+        <table class="data-table" id="users-table">
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th class="hide-mobile">Joined</th>
+              <th class="hide-mobile">Last Active</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="users-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TOP TIDES -->
+    <div class="section">
+      <div class="section-title">Most Popular Tides</div>
+      <div style="overflow-x:auto">
+        <table class="data-table" id="tides-table">
+          <thead>
+            <tr>
+              <th>Peptide</th>
+              <th>Users</th>
+              <th>Total Doses</th>
+              <th>Popularity</th>
+            </tr>
+          </thead>
+          <tbody id="tides-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm'
+
+  const SUPABASE_URL = 'https://dkahofademdpompfdvop.supabase.co'
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRrYWhvZmFkZW1kcG9tcGZkdm9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4OTg3MDUsImV4cCI6MjA4NzQ3NDcwNX0.MnTIXOJC9c5HKBnQTdiqJjsIFuY5W1m_yE40HemUw68'
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+
+  let currentUser = null
+  let accessToken = null
+
+  // ==================== AUTH CHECK ====================
+  supabase.auth.onAuthStateChange(async (event, session) => {
+    if (!session?.user) {
+      document.getElementById('auth-gate').innerHTML = `
+        <div class="icon">🔒</div>
+        <h2 style="margin-bottom:0.5rem">Not Signed In</h2>
+        <p>Please <a href="/" style="color:var(--accent)">sign in</a> to the app first, then return here.</p>
+      `
+      return
+    }
+
+    currentUser = session.user
+    accessToken = session.access_token
+
+    // Check admin
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', currentUser.id)
+      .single()
+
+    if (!profile?.is_admin) {
+      document.getElementById('auth-gate').innerHTML = `
+        <div class="icon">⛔</div>
+        <h2 style="margin-bottom:0.5rem">Access Denied</h2>
+        <p>This page is restricted to administrators.</p>
+        <a href="/" style="color:var(--accent);margin-top:1rem;display:inline-block">← Back to App</a>
+      `
+      return
+    }
+
+    // Show admin content
+    document.getElementById('auth-gate').style.display = 'none'
+    document.getElementById('admin-content').style.display = 'block'
+    document.getElementById('admin-email').textContent = currentUser.email
+
+    loadAll()
+  })
+
+  // ==================== LOAD DATA ====================
+  async function loadAll() {
+    await Promise.all([loadStats(), loadUsers(), loadTopTides()])
+  }
+
+  async function loadStats() {
+    const { data, error } = await supabase.rpc('admin_platform_stats')
+    if (error || !data) return
+    const s = data
+    document.getElementById('s-users').textContent = s.total_users
+    document.getElementById('s-peptides').textContent = s.total_peptides
+    document.getElementById('s-active').textContent = s.active_peptides
+    document.getElementById('s-doses').textContent = s.total_doses
+    document.getElementById('s-taken').textContent = s.doses_taken
+    document.getElementById('s-skipped').textContent = s.doses_skipped
+    document.getElementById('s-today').textContent = s.doses_today
+  }
+
+  async function loadUsers() {
+    const { data: users } = await supabase
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    const tbody = document.getElementById('users-body')
+    if (!users || users.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--subtext);padding:2rem">No users found</td></tr>'
+      return
+    }
+
+    tbody.innerHTML = users.map(u => `
+      <tr>
+        <td class="email-cell">
+          ${esc(u.email || '—')}
+          ${u.is_admin ? '<span class="admin-badge">ADMIN</span>' : ''}
+        </td>
+        <td class="date-cell hide-mobile">${u.created_at ? formatDate(u.created_at) : '—'}</td>
+        <td class="date-cell hide-mobile">${u.last_sign_in ? formatDate(u.last_sign_in) : 'Never'}</td>
+        <td>
+          <div class="tbl-actions">
+            ${u.id !== currentUser.id ? `
+              <button class="tbl-btn" onclick="window.resetPassword('${esc(u.email)}')">Reset PW</button>
+              <button class="tbl-btn admin-toggle" onclick="window.toggleAdmin('${u.id}','${esc(u.email)}')">${u.is_admin ? 'Remove Admin' : 'Make Admin'}</button>
+              <button class="tbl-btn danger" onclick="window.deleteUser('${u.id}','${esc(u.email)}')">Delete</button>
+            ` : '<span style="color:var(--subtext);font-size:0.75rem">You</span>'}
+          </div>
+        </td>
+      </tr>
+    `).join('')
+  }
+
+  async function loadTopTides() {
+    const { data, error } = await supabase.rpc('admin_top_peptides')
+    const tbody = document.getElementById('tides-body')
+    if (error || !data || data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--subtext);padding:2rem">No peptides yet</td></tr>'
+      return
+    }
+
+    const maxDoses = Math.max(...data.map(d => Number(d.total_doses)), 1)
+
+    tbody.innerHTML = data.map(d => `
+      <tr>
+        <td style="font-weight:600">${esc(d.peptide_name)}</td>
+        <td>${d.user_count}</td>
+        <td>${d.total_doses}</td>
+        <td>
+          <div class="tide-bar-wrap">
+            <div class="tide-bar" style="width:${Math.max((d.total_doses / maxDoses) * 100, 5)}%"></div>
+          </div>
+        </td>
+      </tr>
+    `).join('')
+  }
+
+  // ==================== ADMIN ACTIONS ====================
+  async function callAdminFn(body) {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-users`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+        'apikey': SUPABASE_KEY
+      },
+      body: JSON.stringify(body)
+    })
+    return res.json()
+  }
+
+  window.resetPassword = async function(email) {
+    if (!confirm(`Send password reset email to ${email}?`)) return
+    const result = await callAdminFn({ action: 'reset_password', email })
+    if (result.error) { showToast(result.error, true) }
+    else { showToast('Reset email sent to ' + email) }
+  }
+
+  window.toggleAdmin = async function(userId, email) {
+    if (!confirm(`Toggle admin status for ${email}?`)) return
+    const result = await callAdminFn({ action: 'toggle_admin', userId })
+    if (result.error) { showToast(result.error, true) }
+    else { showToast(result.message); loadUsers() }
+  }
+
+  window.deleteUser = async function(userId, email) {
+    if (!confirm(`DELETE user ${email}?\n\nThis will permanently remove their account and all their data. This cannot be undone.`)) return
+    if (!confirm(`Are you absolutely sure you want to delete ${email}?`)) return
+    const result = await callAdminFn({ action: 'delete_user', userId })
+    if (result.error) { showToast(result.error, true) }
+    else { showToast('User deleted'); loadAll() }
+  }
+
+  // ==================== HELPERS ====================
+  function formatDate(iso) {
+    const d = new Date(iso)
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  }
+  function esc(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')
+  }
+  function showToast(msg, isError) {
+    const t = document.getElementById('toast')
+    t.textContent = msg
+    t.className = isError ? 'toast error show' : 'toast show'
+    setTimeout(() => t.classList.remove('show'), 3000)
+  }
+</script>
+</body>
+</html>

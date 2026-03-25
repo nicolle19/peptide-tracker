@@ -534,6 +534,50 @@
 
     /* CSV EXPORT BTN */
     .export-row { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+
+    /* LANDING FEATURES */
+    .landing-features {
+      width: 100%;
+      max-width: 400px;
+      margin-top: 2.5rem;
+      padding-top: 2rem;
+      border-top: 1px solid var(--border);
+    }
+    .landing-features-title {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--subtext);
+      text-align: center;
+      margin-bottom: 1.25rem;
+    }
+    .feature-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+    .feature-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1rem;
+      text-align: center;
+    }
+    .feature-card-icon {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .feature-card-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      margin-bottom: 0.25rem;
+    }
+    .feature-card-desc {
+      font-size: 0.7rem;
+      color: var(--subtext);
+      line-height: 1.4;
+    }
   </style>
 </head>
 <body>
@@ -593,6 +637,42 @@
       Don't have an account? <span id="auth-toggle-link">Sign up</span>
     </div>
   </form>
+
+  <div class="landing-features">
+    <div class="landing-features-title">Why Simple Pep Tracker?</div>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-card-icon">💊</div>
+        <div class="feature-card-title">Daily Stacks</div>
+        <div class="feature-card-desc">See your scheduled peptides each day. One tap to log taken or skipped.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card-icon">📅</div>
+        <div class="feature-card-title">Custom Schedules</div>
+        <div class="feature-card-desc">Set which days of the week each peptide is taken. Your protocol, your way.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card-icon">📍</div>
+        <div class="feature-card-title">Site Rotation</div>
+        <div class="feature-card-desc">Auto-suggests your next injection site and tracks where you last administered.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card-icon">📊</div>
+        <div class="feature-card-title">Stackboard</div>
+        <div class="feature-card-desc">Track compliance, view dose history, add notes, and export your data to CSV.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card-icon">🔒</div>
+        <div class="feature-card-title">Private & Secure</div>
+        <div class="feature-card-desc">Your data is encrypted and only visible to you. Sign in with email or Google.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card-icon">📱</div>
+        <div class="feature-card-title">Works on Any Phone</div>
+        <div class="feature-card-desc">Add to your home screen for a native app feel. No app store needed.</div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ===== MAIN APP ===== -->
@@ -659,6 +739,7 @@
         <div class="card-title" id="profile-email" style="margin-top:0.25rem; font-size:0.95rem;"></div>
       </div>
       <button class="btn btn-danger" id="signout-btn" style="margin-top:0.5rem">Sign Out</button>
+      <a href="/admin.html" id="admin-link" class="btn btn-secondary" style="margin-top:0.5rem;display:none;text-align:center;text-decoration:none">Admin Panel</a>
       <div class="profile-info">Simple Pep Tracker v2.0<br>Track your Stack<br>Data stored securely in Supabase</div>
     </div>
   </div>
@@ -754,6 +835,22 @@
     <div class="modal-handle"></div>
     <div class="modal-title" id="peptide-modal-title">Add Peptide</div>
     <div class="modal-form">
+      <div class="form-group" id="popular-peptide-group">
+        <label>Quick Select (Top 10)</label>
+        <select id="popular-peptide-select">
+          <option value="">— Choose a common peptide or type manually —</option>
+          <option value="BPC-157|Gut healing, tissue repair, recovery|250|mcg">BPC-157</option>
+          <option value="TB-500|Tissue repair, flexibility, reduced inflammation|2.5|mg">TB-500 (Thymosin Beta-4)</option>
+          <option value="CJC-1295|Growth hormone release, recovery, anti-aging|100|mcg">CJC-1295</option>
+          <option value="Ipamorelin|Growth hormone secretagogue, sleep, recovery|200|mcg">Ipamorelin</option>
+          <option value="CJC-1295 / Ipamorelin|GH release combo, recovery, body composition|300|mcg">CJC-1295 / Ipamorelin (Combo)</option>
+          <option value="Semaglutide|GLP-1 agonist, appetite control, metabolic health|0.25|mg">Semaglutide</option>
+          <option value="Tirzepatide|Dual GIP/GLP-1, appetite control, metabolic health|2.5|mg">Tirzepatide</option>
+          <option value="PT-141|Sexual health, libido enhancement|1.75|mg">PT-141 (Bremelanotide)</option>
+          <option value="GHK-Cu|Skin rejuvenation, collagen, anti-aging|200|mcg">GHK-Cu</option>
+          <option value="Selank|Anti-anxiety, cognitive enhancement, immune support|250|mcg">Selank</option>
+        </select>
+      </div>
       <div class="form-group">
         <label>Name</label>
         <input type="text" id="peptide-name" placeholder="e.g. BPC-157">
@@ -962,6 +1059,9 @@
       appEl.style.display = 'flex'
       await loadPeptides()
       renderStacksTab()
+      // Check admin status for admin link
+      const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', currentUser.id).single()
+      if (prof?.is_admin) document.getElementById('admin-link').style.display = 'block'
     } else {
       currentUser = null
       authScreen.style.display = 'flex'
@@ -1341,9 +1441,22 @@
     this.classList.toggle('on')
   })
 
+  // Popular peptide quick-select
+  document.getElementById('popular-peptide-select').addEventListener('change', function() {
+    if (!this.value) return
+    const [name, desc, dose, unit] = this.value.split('|')
+    document.getElementById('peptide-name').value = name
+    document.getElementById('peptide-desc').value = desc
+    document.getElementById('peptide-typical-dose').value = dose
+    document.getElementById('peptide-unit').value = unit
+    this.value = '' // Reset dropdown
+  })
+
   window.openAddPeptide = function() {
     editingPeptideId = null
     document.getElementById('peptide-modal-title').textContent = 'Add Peptide'
+    document.getElementById('popular-peptide-select').value = ''
+    document.getElementById('popular-peptide-group').style.display = 'flex'
     document.getElementById('peptide-name').value = ''
     document.getElementById('peptide-desc').value = ''
     document.getElementById('peptide-typical-dose').value = ''
@@ -1362,6 +1475,7 @@
     const p = peptides.find(x => x.id === id); if (!p) return
     editingPeptideId = id
     document.getElementById('peptide-modal-title').textContent = 'Edit Peptide'
+    document.getElementById('popular-peptide-group').style.display = 'none'
     document.getElementById('peptide-name').value = p.name
     document.getElementById('peptide-desc').value = p.description || ''
     document.getElementById('peptide-typical-dose').value = p.typical_dose || ''
