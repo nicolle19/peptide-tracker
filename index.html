@@ -448,6 +448,7 @@
       margin-left: 0.4rem;
       vertical-align: middle;
     }
+    .tides-filter-btn.active { background: var(--accent) !important; color: #fff !important; border-color: var(--accent) !important; }
     .active-tag {
       font-size: 0.65rem;
       color: var(--accent);
@@ -719,6 +720,11 @@
         <div><h1 class="gradient-text">Tides</h1><div class="subtitle">Your protocol</div></div>
         <button class="btn btn-sm" onclick="window.openAddPeptide()">+ Add</button>
       </div>
+      <div id="tides-filter-row" style="display:flex;gap:0.4rem;margin-top:0.5rem">
+        <button class="btn btn-sm tides-filter-btn active" data-tides-filter="active" onclick="window.setTidesFilter('active')" style="font-size:0.7rem;padding:0.25rem 0.6rem">Active</button>
+        <button class="btn btn-sm btn-ghost tides-filter-btn" data-tides-filter="inactive" onclick="window.setTidesFilter('inactive')" style="font-size:0.7rem;padding:0.25rem 0.6rem">Inactive</button>
+        <button class="btn btn-sm btn-ghost tides-filter-btn" data-tides-filter="all" onclick="window.setTidesFilter('all')" style="font-size:0.7rem;padding:0.25rem 0.6rem">All</button>
+      </div>
     </div>
     <div class="tab-content" id="tides-content"></div>
   </div>
@@ -749,7 +755,7 @@
         <div id="dash-week-nav" style="display:flex;align-items:center;gap:0.4rem">
           <button class="btn btn-sm btn-ghost" id="dash-week-all" style="font-size:0.65rem;padding:0.2rem 0.4rem">All</button>
           <button class="btn btn-sm btn-ghost" id="dash-week-prev" style="font-size:0.7rem;padding:0.2rem 0.4rem">◀</button>
-          <span id="dash-week-label" style="font-size:0.7rem;color:var(--subtext);min-width:90px;text-align:center"></span>
+          <span id="dash-week-label" style="font-size:0.65rem;color:var(--subtext);min-width:140px;text-align:center;white-space:nowrap"></span>
           <button class="btn btn-sm btn-ghost" id="dash-week-next" style="font-size:0.7rem;padding:0.2rem 0.4rem">▶</button>
         </div>
       </div>
@@ -1521,13 +1527,29 @@
   })
 
   // ==================== TIDES TAB ====================
+  let tidesFilter = 'active' // 'active', 'inactive', 'all'
+
+  window.setTidesFilter = function(filter) {
+    tidesFilter = filter
+    document.querySelectorAll('.tides-filter-btn').forEach(btn => {
+      const isActive = btn.dataset.tidesFilter === filter
+      btn.classList.toggle('active', isActive)
+      if (isActive) { btn.classList.remove('btn-ghost') } else { btn.classList.add('btn-ghost') }
+    })
+    renderTides()
+  }
+
   async function renderTides() {
     const container = document.getElementById('tides-content')
-    if (peptides.length === 0) {
-      container.innerHTML = `<div class="empty-state"><div class="empty-icon">🧬</div><h3>No peptides yet</h3><p>Tap + Add to start building your stack</p></div>`
+    const filtered = tidesFilter === 'all' ? peptides : peptides.filter(p => tidesFilter === 'active' ? p.active : !p.active)
+    if (filtered.length === 0) {
+      const msg = peptides.length === 0
+        ? '<p>Tap + Add to start building your stack</p>'
+        : `<p>No ${tidesFilter} peptides. ${tidesFilter === 'active' ? 'Check Inactive for past protocols.' : 'All your peptides are currently active.'}</p>`
+      container.innerHTML = `<div class="empty-state"><div class="empty-icon">🧬</div><h3>${peptides.length === 0 ? 'No peptides yet' : 'No ' + tidesFilter + ' peptides'}</h3>${msg}</div>`
       return
     }
-    container.innerHTML = peptides.map(p => {
+    container.innerHTML = filtered.map(p => {
       const days = p.schedule_days || []
       const daysHtml = DAY_NAMES.map(d =>
         `<span class="schedule-dot${days.includes(d) ? ' on' : ''}">${d[0]}</span>`
@@ -1724,14 +1746,16 @@
 
   function formatWeekLabel(offset) {
     if (offset === null) return 'All Weeks'
-    if (offset === 0) return 'This Week'
-    if (offset === -1) return 'Last Week'
     const { start } = getWeekRange(offset)
-    return start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' week'
+    const end = new Date(start); end.setDate(start.getDate() + 6)
+    const range = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + '–' + end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    if (offset === 0) return 'This Week · ' + range
+    if (offset === -1) return 'Last Week · ' + range
+    return range
   }
 
-  function getWeekHeader(date) {
-    const d = new Date(date)
+  function getWeekHeader(date, weekNum) {
+    const d = new Date(date + 'T00:00:00') // force local timezone parse
     const start = new Date(d)
     start.setDate(d.getDate() - d.getDay())
     start.setHours(0,0,0,0)
@@ -1741,9 +1765,10 @@
     const thisWeekStart = new Date(now); thisWeekStart.setDate(now.getDate() - now.getDay())
     const diff = Math.round((thisWeekStart - start) / (7 * 86400000))
     const range = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' – ' + end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    if (diff === 0) return 'This Week · ' + range
-    if (diff === 1) return 'Last Week · ' + range
-    return range
+    const wkLabel = weekNum != null ? `Wk ${weekNum} · ` : ''
+    if (diff === 0) return wkLabel + 'This Week · ' + range
+    if (diff === 1) return wkLabel + 'Last Week · ' + range
+    return wkLabel + range
   }
 
   // Calculate total scheduled doses for a set of peptides over their active period
@@ -1905,13 +1930,14 @@
       displayLogs.forEach(log => {
         const d = new Date(log.logged_at)
         const weekStart = new Date(d); weekStart.setDate(d.getDate() - d.getDay()); weekStart.setHours(0,0,0,0)
-        const weekKey = weekStart.toISOString().slice(0,10)
+        const weekKey = weekStart.getFullYear() + '-' + String(weekStart.getMonth()+1).padStart(2,'0') + '-' + String(weekStart.getDate()).padStart(2,'0')
         if (!weekGroups[weekKey]) weekGroups[weekKey] = []
         weekGroups[weekKey].push(log)
       })
       const sortedWeeks = Object.entries(weekGroups).sort((a, b) => b[0].localeCompare(a[0]))
-      logsContainer.innerHTML = sortedWeeks.map(([weekKey, weekLogs]) => {
-        const weekHeader = getWeekHeader(weekKey)
+      logsContainer.innerHTML = sortedWeeks.map(([weekKey, weekLogs], idx) => {
+        const weekNum = sortedWeeks.length - idx // newest = highest number
+        const weekHeader = getWeekHeader(weekKey, weekNum)
         const dayGroups = {}
         weekLogs.forEach(log => {
           const dayKey = new Date(log.logged_at).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
