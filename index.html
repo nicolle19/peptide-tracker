@@ -224,7 +224,7 @@
     }
 
     /* STATS */
-    .stats-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
+    .stats-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-bottom: 1rem; }
     .stat-card {
       background: var(--card);
       border: 1px solid var(--border);
@@ -232,9 +232,12 @@
       padding: 0.85rem 0.5rem;
       text-align: center;
     }
-    .stat-number { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.02em; }
+    .stat-number { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
     .stat-number.gradient-text { background: linear-gradient(135deg, #6C5CE7, #00CEC9); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
     .stat-label { color: var(--subtext); font-size: 0.7rem; margin-top: 0.2rem; font-weight: 500; }
+    .stat-filter { cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s; }
+    .stat-filter:hover { border-color: var(--accent); }
+    .stat-filter.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(108,92,231,0.25); }
 
     /* DATE GROUP */
     .date-group-label {
@@ -733,16 +736,18 @@
         <button class="btn btn-sm" id="backfill-dose-btn" style="font-size:0.75rem">＋ Log Past Dose</button>
         <button class="btn btn-sm btn-ghost" id="export-csv-btn">Export CSV</button>
       </div>
-      <div class="stats-row" style="grid-template-columns:1fr 1fr 1fr;">
-        <div class="stat-card"><div class="stat-number gradient-text" id="dash-total">—</div><div class="stat-label">Total Doses</div></div>
-        <div class="stat-card"><div class="stat-number" id="dash-skipped" style="color:var(--danger)">—</div><div class="stat-label">Skipped</div></div>
-        <div class="stat-card"><div class="stat-number" id="dash-compliance" style="color:var(--accent)">—</div><div class="stat-label">Compliance</div></div>
+      <div class="stats-row" style="grid-template-columns:1fr 1fr 1fr 1fr;">
+        <div class="stat-card stat-filter" data-stat-filter="all" onclick="window.setStatFilter('all')"><div class="stat-number gradient-text" id="dash-total">—</div><div class="stat-label">Total</div></div>
+        <div class="stat-card stat-filter" data-stat-filter="taken" onclick="window.setStatFilter('taken')"><div class="stat-number" id="dash-taken" style="color:var(--accent)">—</div><div class="stat-label">Taken</div></div>
+        <div class="stat-card stat-filter" data-stat-filter="skipped" onclick="window.setStatFilter('skipped')"><div class="stat-number" id="dash-skipped" style="color:var(--danger)">—</div><div class="stat-label">Skipped</div></div>
+        <div class="stat-card"><div class="stat-number" id="dash-compliance" style="color:var(--accent)">—</div><div class="stat-label">Compliance</div><div class="stat-label" id="dash-compliance-detail" style="font-size:0.6rem;margin-top:0.1rem"></div></div>
       </div>
       <div id="dash-active-stack"></div>
       <div class="dash-chart" id="dash-chart"></div>
       <div class="section-header" style="display:flex;justify-content:space-between;align-items:center">
         <div class="section-title">Recent Logs</div>
         <div id="dash-week-nav" style="display:flex;align-items:center;gap:0.4rem">
+          <button class="btn btn-sm btn-ghost" id="dash-week-all" style="font-size:0.65rem;padding:0.2rem 0.4rem">All</button>
           <button class="btn btn-sm btn-ghost" id="dash-week-prev" style="font-size:0.7rem;padding:0.2rem 0.4rem">◀</button>
           <span id="dash-week-label" style="font-size:0.7rem;color:var(--subtext);min-width:90px;text-align:center"></span>
           <button class="btn btn-sm btn-ghost" id="dash-week-next" style="font-size:0.7rem;padding:0.2rem 0.4rem">▶</button>
@@ -1691,7 +1696,21 @@
   })
 
   // ==================== STACKBOARD TAB ====================
-  let dashWeekOffset = 0 // 0 = current week, -1 = last week, etc.
+  let dashWeekOffset = 0 // 0 = current week, -1 = last week, null = all weeks
+  let dashStatFilter = 'all' // 'all', 'taken', or 'skipped'
+
+  window.setStatFilter = function(filter) {
+    dashStatFilter = dashStatFilter === filter ? 'all' : filter // toggle
+    updateStatFilterUI()
+    renderDashLogs()
+  }
+
+  function updateStatFilterUI() {
+    document.querySelectorAll('.stat-filter').forEach(el => {
+      el.classList.toggle('active', el.dataset.statFilter === dashStatFilter && dashStatFilter !== 'all')
+    })
+  }
+
 
   function getWeekRange(offset) {
     const now = new Date()
@@ -1704,10 +1723,27 @@
   }
 
   function formatWeekLabel(offset) {
+    if (offset === null) return 'All Weeks'
     if (offset === 0) return 'This Week'
     if (offset === -1) return 'Last Week'
     const { start } = getWeekRange(offset)
     return start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' week'
+  }
+
+  function getWeekHeader(date) {
+    const d = new Date(date)
+    const start = new Date(d)
+    start.setDate(d.getDate() - d.getDay())
+    start.setHours(0,0,0,0)
+    const end = new Date(start)
+    end.setDate(start.getDate() + 6)
+    const now = new Date(); now.setHours(0,0,0,0)
+    const thisWeekStart = new Date(now); thisWeekStart.setDate(now.getDate() - now.getDay())
+    const diff = Math.round((thisWeekStart - start) / (7 * 86400000))
+    const range = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' – ' + end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    if (diff === 0) return 'This Week · ' + range
+    if (diff === 1) return 'Last Week · ' + range
+    return range
   }
 
   // Calculate total scheduled doses for a set of peptides over their active period
@@ -1743,13 +1779,19 @@
     const skipped = logs.filter(l => l.status === 'skipped').length
     const total = taken + skipped
 
-    // Compliance = doses taken / total scheduled doses
+    // Compliance = doses taken / total scheduled doses (capped at 100%)
     const totalScheduled = countScheduledDoses(peptides, filterId)
-    const compliance = totalScheduled > 0 ? Math.round((taken / totalScheduled) * 100) : 0
+    const compliance = totalScheduled > 0 ? Math.min(100, Math.round((taken / totalScheduled) * 100)) : 0
 
     document.getElementById('dash-total').textContent = total
+    document.getElementById('dash-taken').textContent = taken
     document.getElementById('dash-skipped').textContent = skipped
     document.getElementById('dash-compliance').textContent = compliance + '%'
+    document.getElementById('dash-compliance-detail').textContent = totalScheduled > 0 ? `${taken} of ${totalScheduled} scheduled` : ''
+
+    // Store logs for stat filter reuse
+    window._dashLogs = logs
+    updateStatFilterUI()
 
     // Active stack with weeks — clickable to filter entire dashboard
     const activePeps = peptides.filter(p => p.active)
@@ -1817,32 +1859,81 @@
         }).join('')
     }
 
-    // Recent logs — filtered by week
-    const { start: weekStart, end: weekEnd } = getWeekRange(dashWeekOffset)
-    const weekLogs = logs.filter(l => {
-      const d = new Date(l.logged_at)
-      return d >= weekStart && d < weekEnd
-    })
+    renderDashLogs()
+  }
 
-    // Update week nav label
+  // Separate function so stat filter can re-render logs without refetching
+  function renderDashLogs() {
+    const logs = window._dashLogs || []
+
+    // Apply stat filter (taken/skipped/all)
+    let filtered = logs
+    if (dashStatFilter === 'taken') filtered = logs.filter(l => l.status === 'taken')
+    else if (dashStatFilter === 'skipped') filtered = logs.filter(l => l.status === 'skipped')
+
+    // Apply week filter
+    let displayLogs
+    if (dashWeekOffset === null) {
+      displayLogs = filtered
+    } else {
+      const { start: weekStart, end: weekEnd } = getWeekRange(dashWeekOffset)
+      displayLogs = filtered.filter(l => {
+        const d = new Date(l.logged_at)
+        return d >= weekStart && d < weekEnd
+      })
+    }
+
+    // Update week nav label & button states
     document.getElementById('dash-week-label').textContent = formatWeekLabel(dashWeekOffset)
-    // Disable next if we're on current week
-    document.getElementById('dash-week-next').disabled = dashWeekOffset >= 0
+    document.getElementById('dash-week-next').disabled = dashWeekOffset === null || dashWeekOffset >= 0
+    document.getElementById('dash-week-prev').disabled = dashWeekOffset === null
+    const allBtn = document.getElementById('dash-week-all')
+    allBtn.style.background = dashWeekOffset === null ? 'var(--accent)' : ''
+    allBtn.style.color = dashWeekOffset === null ? '#fff' : ''
 
+    const filterLabel = dashStatFilter === 'taken' ? 'taken ' : dashStatFilter === 'skipped' ? 'skipped ' : ''
     const logsContainer = document.getElementById('dash-logs')
-    if (weekLogs.length === 0) {
-      logsContainer.innerHTML = `<div class="empty-state"><div class="empty-icon">📊</div><h3>No logs this week</h3><p>${dashWeekOffset === 0 ? 'Start logging doses to see your dashboard' : 'No doses logged for ' + formatWeekLabel(dashWeekOffset).toLowerCase()}</p></div>`
+    if (displayLogs.length === 0) {
+      const msg = dashWeekOffset === null ? `No ${filterLabel}logs yet` : (dashWeekOffset === 0 ? `No ${filterLabel}logs this week yet` : `No ${filterLabel}doses logged for ` + formatWeekLabel(dashWeekOffset).toLowerCase())
+      logsContainer.innerHTML = `<div class="empty-state"><div class="empty-icon">📊</div><h3>No ${filterLabel}logs${dashWeekOffset !== null ? ' this week' : ''}</h3><p>${msg}</p></div>`
       return
     }
-    const groups = {}
-    weekLogs.forEach(log => {
-      const key = new Date(log.logged_at).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
-      if (!groups[key]) groups[key] = []
-      groups[key].push(log)
-    })
-    logsContainer.innerHTML = Object.entries(groups).map(([date, entries]) =>
-      `<div class="date-group-label">${date}</div>${entries.map(log => dashLogCard(log)).join('')}`
-    ).join('')
+
+    if (dashWeekOffset === null) {
+      // Group by week, then by day within each week
+      const weekGroups = {}
+      displayLogs.forEach(log => {
+        const d = new Date(log.logged_at)
+        const weekStart = new Date(d); weekStart.setDate(d.getDate() - d.getDay()); weekStart.setHours(0,0,0,0)
+        const weekKey = weekStart.toISOString().slice(0,10)
+        if (!weekGroups[weekKey]) weekGroups[weekKey] = []
+        weekGroups[weekKey].push(log)
+      })
+      const sortedWeeks = Object.entries(weekGroups).sort((a, b) => b[0].localeCompare(a[0]))
+      logsContainer.innerHTML = sortedWeeks.map(([weekKey, weekLogs]) => {
+        const weekHeader = getWeekHeader(weekKey)
+        const dayGroups = {}
+        weekLogs.forEach(log => {
+          const dayKey = new Date(log.logged_at).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+          if (!dayGroups[dayKey]) dayGroups[dayKey] = []
+          dayGroups[dayKey].push(log)
+        })
+        return `<div style="font-weight:700;font-size:0.85rem;color:var(--accent);margin:1rem 0 0.5rem;padding-bottom:0.35rem;border-bottom:1px solid var(--border)">${weekHeader}</div>` +
+          Object.entries(dayGroups).map(([date, entries]) =>
+            `<div class="date-group-label">${date}</div>${entries.map(log => dashLogCard(log)).join('')}`
+          ).join('')
+      }).join('')
+    } else {
+      const groups = {}
+      displayLogs.forEach(log => {
+        const key = new Date(log.logged_at).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+        if (!groups[key]) groups[key] = []
+        groups[key].push(log)
+      })
+      logsContainer.innerHTML = Object.entries(groups).map(([date, entries]) =>
+        `<div class="date-group-label">${date}</div>${entries.map(log => dashLogCard(log)).join('')}`
+      ).join('')
+    }
   }
 
   // Dashboard filter helpers — exposed to window for onclick
@@ -1885,8 +1976,12 @@
   document.getElementById('dash-filter').addEventListener('change', renderStackboard)
 
   // Week navigation for Recent Logs
-  document.getElementById('dash-week-prev').addEventListener('click', () => { dashWeekOffset--; renderStackboard() })
-  document.getElementById('dash-week-next').addEventListener('click', () => { if (dashWeekOffset < 0) { dashWeekOffset++; renderStackboard() } })
+  document.getElementById('dash-week-prev').addEventListener('click', () => { if (dashWeekOffset !== null) { dashWeekOffset--; renderDashLogs() } })
+  document.getElementById('dash-week-next').addEventListener('click', () => { if (dashWeekOffset !== null && dashWeekOffset < 0) { dashWeekOffset++; renderDashLogs() } })
+  document.getElementById('dash-week-all').addEventListener('click', () => {
+    dashWeekOffset = dashWeekOffset === null ? 0 : null  // toggle between All and This Week
+    renderDashLogs()
+  })
 
   // Backfill past dose from Stackboard
   document.getElementById('backfill-dose-btn').addEventListener('click', async () => {
