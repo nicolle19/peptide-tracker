@@ -397,6 +397,11 @@
       border-color: var(--accent);
       background: rgba(0,206,201,0.08);
     }
+    .week-day-card.selected {
+      border-color: var(--primary);
+      background: rgba(124,58,237,0.15);
+    }
+    .week-day-card { cursor: pointer; }
     .week-day-name { font-size: 0.65rem; font-weight: 700; color: var(--subtext); text-transform: uppercase; letter-spacing: 0.05em; }
     .week-day-num { font-size: 1.25rem; font-weight: 800; margin: 0.2rem 0; }
     .week-day-count { font-size: 0.65rem; color: var(--accent); font-weight: 600; }
@@ -692,7 +697,14 @@
       </div>
       <div class="section-header"><div class="section-title">This Week</div></div>
       <div class="week-scroll" id="week-scroll"></div>
-      <div class="section-header" style="margin-top:1.25rem"><div class="section-title">Today's Stack</div></div>
+      <div class="section-header" style="margin-top:1.25rem;display:flex;justify-content:space-between;align-items:center">
+        <div class="section-title" id="stack-day-label">Today's Stack</div>
+        <div style="display:flex;gap:0.35rem;align-items:center">
+          <button class="btn btn-sm btn-ghost" id="day-prev" style="padding:0.2rem 0.5rem;font-size:0.85rem" title="Previous day">‹</button>
+          <button class="btn btn-sm btn-ghost" id="day-today" style="padding:0.2rem 0.5rem;font-size:0.7rem;display:none">Today</button>
+          <button class="btn btn-sm btn-ghost" id="day-next" style="padding:0.2rem 0.5rem;font-size:0.85rem" title="Next day">›</button>
+        </div>
+      </div>
       <div id="today-stacks"></div>
     </div>
   </div>
@@ -991,6 +1003,7 @@
   let isSignUp = false
   let editingPeptideId = null
   let currentTab = 'stacks'
+  let selectedDate = new Date() // Stacks tab date, defaults to today
 
   const SITES = [
     { value: 'stomach_left', label: 'Stomach (L)' },
@@ -1142,7 +1155,7 @@
       const fab = document.getElementById('fab-log')
       fab.style.display = (tab === 'stacks') ? 'flex' : 'none'
       currentTab = tab
-      if (tab === 'stacks') renderStacksTab()
+      if (tab === 'stacks') { selectedDate = new Date(); renderStacksTab() }
       if (tab === 'tides') renderTides()
       if (tab === 'stackboard') renderStackboard()
     })
@@ -1169,27 +1182,56 @@
 
   // ==================== STACKS TAB ====================
   function renderStacksTab() {
-    const now = new Date()
-    document.getElementById('today-date').textContent = now.toLocaleDateString('en-US', {
+    document.getElementById('today-date').textContent = selectedDate.toLocaleDateString('en-US', {
       weekday: 'long', month: 'long', day: 'numeric'
     })
+    const isToday = selectedDate.toDateString() === new Date().toDateString()
+    document.getElementById('stack-day-label').textContent = isToday ? "Today's Stack" : selectedDate.toLocaleDateString('en-US', { weekday: 'long' }) + "'s Stack"
+    document.getElementById('day-today').style.display = isToday ? 'none' : 'inline-block'
     renderWeekPreview()
     loadTodayStacks()
+  }
+
+  // Day navigation
+  document.getElementById('day-prev').addEventListener('click', () => {
+    selectedDate = new Date(selectedDate)
+    selectedDate.setDate(selectedDate.getDate() - 1)
+    renderStacksTab()
+  })
+  document.getElementById('day-next').addEventListener('click', () => {
+    selectedDate = new Date(selectedDate)
+    selectedDate.setDate(selectedDate.getDate() + 1)
+    renderStacksTab()
+  })
+  document.getElementById('day-today').addEventListener('click', () => {
+    selectedDate = new Date()
+    renderStacksTab()
+  })
+
+  window.selectDay = function(dateStr) {
+    selectedDate = new Date(dateStr + 'T12:00:00')
+    renderStacksTab()
   }
 
   function renderWeekPreview() {
     const container = document.getElementById('week-scroll')
     const today = new Date()
-    const startOfWeek = new Date(today)
-    startOfWeek.setDate(today.getDate() - today.getDay())
+    const startOfWeek = new Date(selectedDate)
+    startOfWeek.setDate(selectedDate.getDate() - selectedDate.getDay())
     let html = ''
     for (let i = 0; i < 7; i++) {
       const d = new Date(startOfWeek)
       d.setDate(startOfWeek.getDate() + i)
       const dayName = DAY_NAMES[d.getDay()]
       const isToday = d.toDateString() === today.toDateString()
+      const isSelected = d.toDateString() === selectedDate.toDateString()
       const scheduled = peptides.filter(p => p.active && isScheduledForDay(p, dayName) && isWithinDateRange(p, d))
-      html += `<div class="week-day-card${isToday ? ' today' : ''}">
+      const dateStr = d.toISOString().slice(0,10)
+      const classes = ['week-day-card']
+      if (isSelected && !isToday) classes.push('selected')
+      if (isToday) classes.push('today')
+      if (isSelected && isToday) classes.push('selected')
+      html += `<div class="${classes.join(' ')}" onclick="selectDay('${dateStr}')">
         <div class="week-day-name">${dayName}</div>
         <div class="week-day-num">${d.getDate()}</div>
         <div class="week-day-count">${scheduled.length} dose${scheduled.length !== 1 ? 's' : ''}</div>
@@ -1216,14 +1258,13 @@
   }
 
   async function loadTodayStacks() {
-    const today = new Date()
-    const dayName = DAY_NAMES[today.getDay()]
-    const todayStr = today.toISOString().slice(0,10)
+    const viewDate = new Date(selectedDate)
+    const dayName = DAY_NAMES[viewDate.getDay()]
 
-    const scheduled = peptides.filter(p => p.active && isScheduledForDay(p, dayName) && isWithinDateRange(p, today))
+    const scheduled = peptides.filter(p => p.active && isScheduledForDay(p, dayName) && isWithinDateRange(p, viewDate))
 
-    // Get today's logs
-    const todayStart = new Date(today); todayStart.setHours(0,0,0,0)
+    // Get logs for selected day
+    const todayStart = new Date(viewDate); todayStart.setHours(0,0,0,0)
     const todayEnd = new Date(todayStart); todayEnd.setDate(todayEnd.getDate() + 1)
     const { data: logs } = await supabase
       .from('dose_logs').select('*, peptides(name)')
@@ -1300,6 +1341,15 @@
     openModal('modal-quick-log')
   }
 
+  function getLogTimestamp() {
+    const now = new Date()
+    if (selectedDate.toDateString() === now.toDateString()) return now.toISOString()
+    // For past/future days, use noon on that day
+    const d = new Date(selectedDate)
+    d.setHours(12, 0, 0, 0)
+    return d.toISOString()
+  }
+
   window.skipDose = async function(peptideId) {
     const p = peptides.find(x => x.id === peptideId)
     if (!p) return
@@ -1308,7 +1358,7 @@
       peptide_id: peptideId,
       dose_amount: p.typical_dose || 0,
       unit: p.unit || 'mcg',
-      logged_at: new Date().toISOString(),
+      logged_at: getLogTimestamp(),
       status: 'skipped',
       site_location: null,
       notes: null
@@ -1334,7 +1384,7 @@
       peptide_id: peptideId,
       dose_amount: amount,
       unit,
-      logged_at: new Date().toISOString(),
+      logged_at: getLogTimestamp(),
       status: 'taken',
       site_location: site,
       notes: notes || null
