@@ -262,7 +262,7 @@
   let accessToken = null
 
   // ==================== AUTH CHECK ====================
-  supabase.auth.onAuthStateChange(async (event, session) => {
+  async function handleSession(session) {
     if (!session?.user) {
       document.getElementById('auth-gate').innerHTML = `
         <div class="icon">🔒</div>
@@ -305,7 +305,27 @@
     document.getElementById('admin-email').textContent = currentUser.email
 
     loadAll()
+  }
+
+  // Listen for future auth changes
+  supabase.auth.onAuthStateChange(async (event, session) => {
+    await handleSession(session)
   })
+
+  // Also explicitly check current session on page load (fallback)
+  ;(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      await handleSession(session)
+    } catch (e) {
+      console.error('getSession failed:', e)
+      document.getElementById('auth-gate').innerHTML = `
+        <div class="icon">⚠️</div>
+        <h2 style="margin-bottom:0.5rem">Connection Error</h2>
+        <p>Could not verify session. Please <a href="/" style="color:var(--accent)">go back</a> and try again.</p>
+      `
+    }
+  })()
 
   // ==================== LOAD DATA ====================
   async function loadAll() {

@@ -1051,7 +1051,7 @@
   }
 
   // ==================== SESSION ====================
-  supabase.auth.onAuthStateChange(async (event, session) => {
+  async function handleSession(session) {
     if (session?.user) {
       currentUser = session.user
       document.getElementById('profile-email').textContent = currentUser.email
@@ -1075,7 +1075,22 @@
       authScreen.style.display = 'flex'
       appEl.style.display = 'none'
     }
+  }
+
+  // Listen for future auth changes (sign in, sign out, token refresh)
+  supabase.auth.onAuthStateChange(async (event, session) => {
+    await handleSession(session)
   })
+
+  // Explicit session check on page load (fallback for when onAuthStateChange doesn't fire)
+  ;(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      await handleSession(session)
+    } catch (e) {
+      console.error('getSession failed:', e)
+    }
+  })()
 
   // ==================== NAVIGATION ====================
   document.querySelectorAll('.nav-item').forEach(btn => {
