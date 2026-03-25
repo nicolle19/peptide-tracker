@@ -256,7 +256,12 @@
   const SUPABASE_URL = 'https://dkahofademdpompfdvop.supabase.co'
   const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRrYWhvZmFkZW1kcG9tcGZkdm9wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4OTg3MDUsImV4cCI6MjA4NzQ3NDcwNX0.MnTIXOJC9c5HKBnQTdiqJjsIFuY5W1m_yE40HemUw68'
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+  // Disable Web Locks API — prevents orphaned lock issues in multi-page apps
+  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: {
+      lock: async (name, acquireTimeout, fn) => await fn()
+    }
+  })
 
   let currentUser = null
   let accessToken = null
