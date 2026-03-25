@@ -718,12 +718,14 @@
     <div class="tab-content">
       <div class="export-row">
         <select id="dash-filter" class="filter-select"><option value="">All peptides</option></select>
+        <button class="btn btn-sm" id="backfill-dose-btn" style="font-size:0.75rem">＋ Log Past Dose</button>
         <button class="btn btn-sm btn-ghost" id="export-csv-btn">Export CSV</button>
       </div>
       <div class="stats-row" style="grid-template-columns:1fr 1fr;">
         <div class="stat-card"><div class="stat-number gradient-text" id="dash-total">—</div><div class="stat-label">Total Doses</div></div>
         <div class="stat-card"><div class="stat-number" id="dash-compliance" style="color:var(--accent)">—</div><div class="stat-label">Compliance</div></div>
       </div>
+      <div id="dash-active-stack"></div>
       <div class="dash-chart" id="dash-chart"></div>
       <div class="section-header"><div class="section-title">Recent Logs</div></div>
       <div id="dash-logs"></div>
@@ -885,6 +887,10 @@
           <label>Start Date</label>
           <input type="date" id="peptide-start-date">
         </div>
+        <div class="form-group" style="flex:0.6">
+          <label>Weeks</label>
+          <input type="number" id="peptide-weeks" placeholder="—" min="1" max="104" step="1">
+        </div>
         <div class="form-group" style="flex:1">
           <label>End Date</label>
           <input type="date" id="peptide-end-date">
@@ -922,20 +928,45 @@
   </div>
 </div>
 
-<!-- ===== MODAL: ADD NOTE TO LOG ===== -->
-<div class="modal-overlay" id="modal-note">
+<!-- ===== MODAL: EDIT DOSE LOG ===== -->
+<div class="modal-overlay" id="modal-edit-log">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
-    <div class="modal-title">Add Note</div>
+    <div class="modal-title">Edit Dose Log</div>
     <div class="modal-form">
       <div class="form-group">
-        <label>How did you feel?</label>
-        <textarea id="note-text" rows="3" placeholder="Energy levels, side effects, mood..."></textarea>
+        <label>Status</label>
+        <div class="input-row">
+          <button type="button" class="btn edit-status-btn active" id="edit-status-taken" style="flex:1">Taken</button>
+          <button type="button" class="btn btn-secondary edit-status-btn" id="edit-status-skipped" style="flex:1">Skipped</button>
+        </div>
       </div>
-      <input type="hidden" id="note-log-id">
+      <div class="form-group">
+        <label>Amount</label>
+        <div class="input-row">
+          <input type="number" id="edit-dose-amount" placeholder="250" step="any" min="0">
+          <select id="edit-dose-unit">
+            <option>mcg</option><option>mg</option><option>IU</option><option>ml</option><option>units</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Injection Site</label>
+        <div class="site-grid" id="edit-site-grid"></div>
+      </div>
+      <div class="form-group">
+        <label>Date &amp; Time</label>
+        <input type="datetime-local" id="edit-datetime">
+      </div>
+      <div class="form-group">
+        <label>Notes (optional)</label>
+        <textarea id="edit-notes" rows="2" placeholder="How you're feeling..."></textarea>
+      </div>
+      <input type="hidden" id="edit-log-id">
+      <div id="edit-log-error" class="error-msg" style="display:none"></div>
       <div class="modal-actions">
-        <button class="btn btn-secondary" id="note-cancel">Cancel</button>
-        <button class="btn" id="note-save" style="flex:1">Save Note</button>
+        <button class="btn btn-secondary" id="edit-log-cancel">Cancel</button>
+        <button class="btn" id="edit-log-save" style="flex:1">Save Changes</button>
       </div>
     </div>
   </div>
@@ -1423,7 +1454,7 @@
     })
     btn.disabled = false; btn.textContent = 'Save'
     if (error) { showErr('log-error', error.message) }
-    else { closeModal('modal-log'); loadTodayStacks() }
+    else { closeModal('modal-log'); loadTodayStacks(); if (currentTab === 'stackboard') renderStackboard() }
   })
 
   // ==================== TIDES TAB ====================
@@ -1473,6 +1504,44 @@
     this.classList.toggle('on')
   })
 
+  // Weeks ↔ date auto-calc
+  document.getElementById('peptide-weeks').addEventListener('input', function() {
+    const startVal = document.getElementById('peptide-start-date').value
+    const weeks = parseInt(this.value)
+    if (startVal && weeks > 0) {
+      const start = new Date(startVal + 'T00:00:00')
+      start.setDate(start.getDate() + weeks * 7)
+      document.getElementById('peptide-end-date').value = start.toISOString().slice(0, 10)
+    }
+  })
+
+  document.getElementById('peptide-start-date').addEventListener('change', function() {
+    const weeks = parseInt(document.getElementById('peptide-weeks').value)
+    if (this.value && weeks > 0) {
+      const start = new Date(this.value + 'T00:00:00')
+      start.setDate(start.getDate() + weeks * 7)
+      document.getElementById('peptide-end-date').value = start.toISOString().slice(0, 10)
+    } else if (this.value && document.getElementById('peptide-end-date').value) {
+      calcWeeksFromDates()
+    }
+  })
+
+  document.getElementById('peptide-end-date').addEventListener('change', function() {
+    calcWeeksFromDates()
+  })
+
+  function calcWeeksFromDates() {
+    const s = document.getElementById('peptide-start-date').value
+    const e = document.getElementById('peptide-end-date').value
+    if (s && e) {
+      const diffMs = new Date(e + 'T00:00:00') - new Date(s + 'T00:00:00')
+      const weeks = Math.round(diffMs / (7 * 24 * 60 * 60 * 1000))
+      document.getElementById('peptide-weeks').value = weeks > 0 ? weeks : ''
+    } else {
+      document.getElementById('peptide-weeks').value = ''
+    }
+  }
+
   // Popular peptide quick-select
   document.getElementById('popular-peptide-select').addEventListener('change', function() {
     if (!this.value) return
@@ -1494,6 +1563,7 @@
     document.getElementById('peptide-typical-dose').value = ''
     document.getElementById('peptide-unit').value = 'mcg'
     document.getElementById('peptide-start-date').value = ''
+    document.getElementById('peptide-weeks').value = ''
     document.getElementById('peptide-end-date').value = ''
     document.getElementById('peptide-cycles').value = '1'
     document.getElementById('peptide-default-site').value = 'stomach_left'
@@ -1514,6 +1584,14 @@
     document.getElementById('peptide-unit').value = p.unit || 'mcg'
     document.getElementById('peptide-start-date').value = p.start_date || ''
     document.getElementById('peptide-end-date').value = p.end_date || ''
+    // Auto-calc weeks from existing dates
+    if (p.start_date && p.end_date) {
+      const diffMs = new Date(p.end_date + 'T00:00:00') - new Date(p.start_date + 'T00:00:00')
+      const wks = Math.round(diffMs / (7 * 24 * 60 * 60 * 1000))
+      document.getElementById('peptide-weeks').value = wks > 0 ? wks : ''
+    } else {
+      document.getElementById('peptide-weeks').value = ''
+    }
     document.getElementById('peptide-cycles').value = p.cycles || 1
     document.getElementById('peptide-default-site').value = p.default_site || 'stomach_left'
     const toggle = document.getElementById('peptide-active-toggle')
@@ -1570,6 +1648,43 @@
 
     document.getElementById('dash-total').textContent = total
     document.getElementById('dash-compliance').textContent = compliance + '%'
+
+    // Active stack with weeks — clickable to filter
+    const activePeps = peptides.filter(p => p.active)
+    const stackContainer = document.getElementById('dash-active-stack')
+    if (activePeps.length > 0) {
+      const today = new Date(); today.setHours(0,0,0,0)
+      const isFiltered = !!filterId
+      stackContainer.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">' +
+        '<div style="font-weight:700;font-size:0.9rem">Active Stack</div>' +
+        (isFiltered ? '<button class="btn btn-sm btn-ghost" onclick="document.getElementById(\'dash-filter\').value=\'\';renderStackboard()" style="font-size:0.7rem;padding:0.2rem 0.5rem">Show All</button>' : '') +
+        '</div>' +
+        activePeps.map(p => {
+          let weeksText = '—'
+          if (p.start_date) {
+            const start = new Date(p.start_date + 'T00:00:00')
+            if (p.end_date) {
+              const end = new Date(p.end_date + 'T00:00:00')
+              const totalWks = Math.round((end - start) / (7 * 86400000))
+              const elapsedWks = Math.max(0, Math.round((today - start) / (7 * 86400000)))
+              weeksText = `Week ${Math.min(elapsedWks, totalWks)} of ${totalWks}`
+            } else {
+              const elapsedWks = Math.max(0, Math.round((today - start) / (7 * 86400000)))
+              weeksText = `${elapsedWks} week${elapsedWks !== 1 ? 's' : ''} in`
+            }
+          }
+          const isSelected = filterId === p.id
+          const border = isSelected ? 'border:1px solid var(--accent)' : ''
+          return `<div class="card" style="padding:0.65rem 0.85rem;margin-bottom:0.4rem;cursor:pointer;${border}" onclick="document.getElementById('dash-filter').value='${p.id}';renderStackboard()">
+            <div class="card-row" style="align-items:center">
+              <div class="card-title" style="font-size:0.85rem;margin:0">${isSelected ? '<span style="color:var(--accent);margin-right:0.3rem">▸</span>' : ''}${escHtml(p.name)}</div>
+              <span class="badge" style="font-size:0.75rem;white-space:nowrap">${weeksText}</span>
+            </div>
+          </div>`
+        }).join('')
+    } else {
+      stackContainer.innerHTML = ''
+    }
 
     // Chart by peptide
     const byPeptide = {}
@@ -1632,13 +1747,39 @@
       </div>
       <div class="action-btns">
         <span class="badge">${log.dose_amount} ${escHtml(log.unit)}</span>
-        <button class="action-btn" onclick="window.openNote('${log.id}','${escHtml(log.notes || '')}')">📝</button>
+        <button class="action-btn" onclick="window.openEditLog('${log.id}')" title="Edit dose">✏️</button>
         <button class="action-btn danger" onclick="window.deleteLog('${log.id}')">🗑</button>
       </div>
     </div></div>`
   }
 
   document.getElementById('dash-filter').addEventListener('change', renderStackboard)
+
+  // Backfill past dose from Stackboard
+  document.getElementById('backfill-dose-btn').addEventListener('click', async () => {
+    const activePeptides = peptides.filter(p => p.active)
+    if (!activePeptides.length) { alert('Add a peptide first.'); return }
+    // Pre-select the filtered peptide if one is selected
+    const filterId = document.getElementById('dash-filter').value
+    document.getElementById('log-datetime').value = ''
+    document.getElementById('log-dose-amount').value = ''
+    document.getElementById('log-notes').value = ''
+    document.getElementById('log-error').style.display = 'none'
+    // Set peptide select to filtered one if applicable
+    if (filterId) {
+      document.getElementById('log-peptide-select').value = filterId
+    }
+    syncUnitFromPeptide()
+    const sel = document.getElementById('log-peptide-select')
+    const pid = sel.value
+    const p = peptides.find(x => x.id === pid)
+    if (p) {
+      document.getElementById('log-dose-amount').value = p.typical_dose || ''
+    }
+    const nextSite = p ? await getNextSiteAsync(pid, p.default_site) : 'stomach_left'
+    renderSiteGrid('log-site-grid', nextSite)
+    openModal('modal-log')
+  })
 
   // ==================== CSV EXPORT ====================
   document.getElementById('export-csv-btn').addEventListener('click', async () => {
@@ -1673,24 +1814,78 @@
     URL.revokeObjectURL(url)
   })
 
-  // ==================== NOTE MODAL ====================
-  document.getElementById('note-cancel').addEventListener('click', () => closeModal('modal-note'))
-  document.getElementById('modal-note').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal('modal-note') })
+  // ==================== EDIT DOSE LOG MODAL ====================
+  document.getElementById('edit-log-cancel').addEventListener('click', () => closeModal('modal-edit-log'))
+  document.getElementById('modal-edit-log').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal('modal-edit-log') })
 
-  window.openNote = function(logId, existingNote) {
-    document.getElementById('note-log-id').value = logId
-    document.getElementById('note-text').value = existingNote || ''
-    openModal('modal-note')
+  // Status toggle
+  document.getElementById('edit-status-taken').addEventListener('click', function() {
+    this.classList.add('active'); this.classList.remove('btn-secondary')
+    const skip = document.getElementById('edit-status-skipped')
+    skip.classList.remove('active'); skip.classList.add('btn-secondary')
+  })
+  document.getElementById('edit-status-skipped').addEventListener('click', function() {
+    this.classList.add('active'); this.classList.remove('btn-secondary')
+    const take = document.getElementById('edit-status-taken')
+    take.classList.remove('active'); take.classList.add('btn-secondary')
+  })
+
+  window.openEditLog = async function(logId) {
+    // Fetch the full log record
+    const { data: log, error } = await supabase.from('dose_logs').select('*').eq('id', logId).single()
+    if (error || !log) return
+
+    document.getElementById('edit-log-id').value = log.id
+    document.getElementById('edit-dose-amount').value = log.dose_amount || ''
+    document.getElementById('edit-dose-unit').value = log.unit || 'mcg'
+    document.getElementById('edit-notes').value = log.notes || ''
+    document.getElementById('edit-log-error').style.display = 'none'
+
+    // Set datetime
+    const dt = new Date(log.logged_at)
+    const local = new Date(dt - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+    document.getElementById('edit-datetime').value = local
+
+    // Set status buttons
+    const takenBtn = document.getElementById('edit-status-taken')
+    const skipBtn = document.getElementById('edit-status-skipped')
+    if (log.status === 'skipped') {
+      skipBtn.classList.add('active'); skipBtn.classList.remove('btn-secondary')
+      takenBtn.classList.remove('active'); takenBtn.classList.add('btn-secondary')
+    } else {
+      takenBtn.classList.add('active'); takenBtn.classList.remove('btn-secondary')
+      skipBtn.classList.remove('active'); skipBtn.classList.add('btn-secondary')
+    }
+
+    // Render site grid
+    renderSiteGrid('edit-site-grid', log.site_location || 'stomach_left')
+
+    openModal('modal-edit-log')
   }
 
-  document.getElementById('note-save').addEventListener('click', async () => {
-    const logId = document.getElementById('note-log-id').value
-    const notes = document.getElementById('note-text').value.trim()
-    const btn = document.getElementById('note-save')
+  // Keep legacy openNote as alias for backwards compat
+  window.openNote = function(logId) { window.openEditLog(logId) }
+
+  document.getElementById('edit-log-save').addEventListener('click', async () => {
+    const logId = document.getElementById('edit-log-id').value
+    const dose_amount = parseFloat(document.getElementById('edit-dose-amount').value)
+    const unit = document.getElementById('edit-dose-unit').value
+    const datetime = document.getElementById('edit-datetime').value
+    const notes = document.getElementById('edit-notes').value.trim()
+    const site = document.querySelector('#edit-site-grid .site-btn.active')?.dataset.site || null
+    const status = document.getElementById('edit-status-taken').classList.contains('active') ? 'taken' : 'skipped'
+
+    if (!dose_amount || !datetime) { showErr('edit-log-error', 'Amount and date are required.'); return }
+
+    const btn = document.getElementById('edit-log-save')
     btn.disabled = true; btn.textContent = 'Saving...'
-    const { error } = await supabase.from('dose_logs').update({ notes: notes || null }).eq('id', logId)
-    btn.disabled = false; btn.textContent = 'Save Note'
-    if (!error) { closeModal('modal-note'); renderStackboard() }
+    const { error } = await supabase.from('dose_logs').update({
+      dose_amount, unit, logged_at: new Date(datetime).toISOString(),
+      notes: notes || null, status, site_location: site
+    }).eq('id', logId)
+    btn.disabled = false; btn.textContent = 'Save Changes'
+    if (error) { showErr('edit-log-error', error.message) }
+    else { closeModal('modal-edit-log'); loadTodayStacks(); renderStackboard() }
   })
 
   // ==================== DELETE ====================
