@@ -276,11 +276,18 @@
     accessToken = session.access_token
 
     // Check admin
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', currentUser.id)
-      .single()
+    let profile = null
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', currentUser.id)
+        .single()
+      if (error) console.error('Admin check error:', error)
+      profile = data
+    } catch (e) {
+      console.error('Admin check failed:', e)
+    }
 
     if (!profile?.is_admin) {
       document.getElementById('auth-gate').innerHTML = `

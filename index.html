@@ -1057,11 +1057,19 @@
       document.getElementById('profile-email').textContent = currentUser.email
       authScreen.style.display = 'none'
       appEl.style.display = 'flex'
-      await loadPeptides()
-      renderStacksTab()
+      try {
+        await loadPeptides()
+        renderStacksTab()
+      } catch (e) {
+        console.error('Error loading data:', e)
+      }
       // Check admin status for admin link
-      const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', currentUser.id).single()
-      if (prof?.is_admin) document.getElementById('admin-link').style.display = 'block'
+      try {
+        const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', currentUser.id).single()
+        if (prof?.is_admin) document.getElementById('admin-link').style.display = 'block'
+      } catch (e) {
+        console.error('Admin check failed:', e)
+      }
     } else {
       currentUser = null
       authScreen.style.display = 'flex'
@@ -1088,7 +1096,8 @@
 
   // ==================== DATA ====================
   async function loadPeptides() {
-    const { data } = await supabase.from('peptides').select('*').order('name')
+    const { data, error } = await supabase.from('peptides').select('*').order('name')
+    if (error) console.error('loadPeptides error:', error)
     peptides = data || []
     updateSelects()
   }
