@@ -1059,51 +1059,46 @@
   }
 
   // ==================== SESSION ====================
-  let sessionHandled = false
-
-  async function handleSession(session) {
-    if (session?.user) {
-      currentUser = session.user
-      document.getElementById('profile-email').textContent = currentUser.email
-      authScreen.style.display = 'none'
-      appEl.style.display = 'flex'
-      try {
+  // Simple direct approach: check session on load, listen for sign-in/sign-out
+  async function initSession() {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        currentUser = session.user
+        document.getElementById('profile-email').textContent = currentUser.email
+        authScreen.style.display = 'none'
+        appEl.style.display = 'flex'
         await loadPeptides()
         renderStacksTab()
-      } catch (e) {
-        console.error('Error loading data:', e)
-      }
-      // Check admin status for admin link
-      try {
+        // Admin link check
         const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', currentUser.id).single()
         if (prof?.is_admin) document.getElementById('admin-link').style.display = 'block'
-      } catch (e) {
-        console.error('Admin check failed:', e)
+      } else {
+        authScreen.style.display = 'flex'
+        appEl.style.display = 'none'
       }
-    } else {
-      currentUser = null
+    } catch (e) {
+      console.error('Session init error:', e)
       authScreen.style.display = 'flex'
       appEl.style.display = 'none'
     }
   }
 
-  // Use ONLY onAuthStateChange — no concurrent getSession() to avoid token refresh race conditions
-  supabase.auth.onAuthStateChange(async (event, session) => {
-    sessionHandled = true
-    await handleSession(session)
+  // Listen for auth changes (sign in via form/OAuth, sign out)
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      initSession()
+    } else if (event === 'SIGNED_OUT') {
+      currentUser = null
+      peptides = []
+      authScreen.style.display = 'flex'
+      appEl.style.display = 'none'
+      document.getElementById('admin-link').style.display = 'none'
+    }
   })
 
-  // Safety net: if onAuthStateChange hasn't fired after 3 seconds, try getSession once
-  setTimeout(async () => {
-    if (!sessionHandled) {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        await handleSession(session)
-      } catch (e) {
-        console.error('Fallback getSession failed:', e)
-      }
-    }
-  }, 3000)
+  // Run on page load
+  initSession()
 
   // ==================== NAVIGATION ====================
   document.querySelectorAll('.nav-item').forEach(btn => {
