@@ -262,63 +262,52 @@
   let accessToken = null
 
   // ==================== AUTH CHECK ====================
-  async function handleSession(session) {
-    if (!session?.user) {
-      document.getElementById('auth-gate').innerHTML = `
-        <div class="icon">🔒</div>
-        <h2 style="margin-bottom:0.5rem">Not Signed In</h2>
-        <p>Please <a href="/" style="color:var(--accent)">sign in</a> to the app first, then return here.</p>
-      `
-      return
-    }
-
-    currentUser = session.user
-    accessToken = session.access_token
-
-    // Check admin
-    let profile = null
+  // Admin page uses ONLY getSession() — no onAuthStateChange to avoid token refresh race conditions
+  ;(async () => {
     try {
-      const { data, error } = await supabase
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+      if (sessionError) console.error('Session error:', sessionError)
+
+      if (!session?.user) {
+        document.getElementById('auth-gate').innerHTML = `
+          <div class="icon">🔒</div>
+          <h2 style="margin-bottom:0.5rem">Not Signed In</h2>
+          <p>Please <a href="/" style="color:var(--accent)">sign in</a> to the app first, then return here.</p>
+        `
+        return
+      }
+
+      currentUser = session.user
+      accessToken = session.access_token
+
+      // Check admin
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('is_admin')
         .eq('id', currentUser.id)
         .single()
-      if (error) console.error('Admin check error:', error)
-      profile = data
+
+      if (profileError) console.error('Admin check error:', profileError)
+
+      if (!profile?.is_admin) {
+        document.getElementById('auth-gate').innerHTML = `
+          <div class="icon">⛔</div>
+          <h2 style="margin-bottom:0.5rem">Access Denied</h2>
+          <p>This page is restricted to administrators.</p>
+          <a href="/" style="color:var(--accent);margin-top:1rem;display:inline-block">← Back to App</a>
+        `
+        return
+      }
+
+      // Show admin content
+      document.getElementById('auth-gate').style.display = 'none'
+      document.getElementById('admin-content').style.display = 'block'
+      document.getElementById('admin-email').textContent = currentUser.email
+
+      loadAll()
     } catch (e) {
-      console.error('Admin check failed:', e)
-    }
-
-    if (!profile?.is_admin) {
-      document.getElementById('auth-gate').innerHTML = `
-        <div class="icon">⛔</div>
-        <h2 style="margin-bottom:0.5rem">Access Denied</h2>
-        <p>This page is restricted to administrators.</p>
-        <a href="/" style="color:var(--accent);margin-top:1rem;display:inline-block">← Back to App</a>
-      `
-      return
-    }
-
-    // Show admin content
-    document.getElementById('auth-gate').style.display = 'none'
-    document.getElementById('admin-content').style.display = 'block'
-    document.getElementById('admin-email').textContent = currentUser.email
-
-    loadAll()
-  }
-
-  // Listen for future auth changes
-  supabase.auth.onAuthStateChange(async (event, session) => {
-    await handleSession(session)
-  })
-
-  // Also explicitly check current session on page load (fallback)
-  ;(async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      await handleSession(session)
-    } catch (e) {
-      console.error('getSession failed:', e)
+      console.error('Admin init failed:', e)
       document.getElementById('auth-gate').innerHTML = `
         <div class="icon">⚠️</div>
         <h2 style="margin-bottom:0.5rem">Connection Error</h2>

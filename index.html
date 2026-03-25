@@ -1039,7 +1039,10 @@
     } catch(e) {
       console.error('Sign out error:', e)
     }
-    // Force clear and reload regardless
+    // Nuclear option: clear all Supabase auth data from localStorage
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('sb-')) localStorage.removeItem(key)
+    })
     window.location.href = window.location.origin
   })
 
@@ -1051,6 +1054,8 @@
   }
 
   // ==================== SESSION ====================
+  let sessionHandled = false
+
   async function handleSession(session) {
     if (session?.user) {
       currentUser = session.user
@@ -1077,20 +1082,23 @@
     }
   }
 
-  // Listen for future auth changes (sign in, sign out, token refresh)
+  // Use ONLY onAuthStateChange — no concurrent getSession() to avoid token refresh race conditions
   supabase.auth.onAuthStateChange(async (event, session) => {
+    sessionHandled = true
     await handleSession(session)
   })
 
-  // Explicit session check on page load (fallback for when onAuthStateChange doesn't fire)
-  ;(async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      await handleSession(session)
-    } catch (e) {
-      console.error('getSession failed:', e)
+  // Safety net: if onAuthStateChange hasn't fired after 3 seconds, try getSession once
+  setTimeout(async () => {
+    if (!sessionHandled) {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        await handleSession(session)
+      } catch (e) {
+        console.error('Fallback getSession failed:', e)
+      }
     }
-  })()
+  }, 3000)
 
   // ==================== NAVIGATION ====================
   document.querySelectorAll('.nav-item').forEach(btn => {
