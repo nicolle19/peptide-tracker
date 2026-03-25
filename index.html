@@ -448,7 +448,7 @@
       margin-left: 0.4rem;
       vertical-align: middle;
     }
-    .tides-filter-btn.active { background: var(--accent) !important; color: #fff !important; border-color: var(--accent) !important; }
+    .tides-filter-btn.active, .dash-status-btn.active { background: var(--accent) !important; color: #fff !important; border-color: var(--accent) !important; }
     .active-tag {
       font-size: 0.65rem;
       color: var(--accent);
@@ -735,6 +735,11 @@
       <div class="header-row">
         <div><h1 class="gradient-text">Stackboard</h1><div class="subtitle">Usage dashboard</div></div>
       </div>
+      <div id="dash-status-filter-row" style="display:flex;gap:0.4rem;margin-top:0.5rem">
+        <button class="btn btn-sm dash-status-btn active" data-dash-status="active" onclick="window.setDashStatusFilter('active')" style="font-size:0.7rem;padding:0.25rem 0.6rem">Active</button>
+        <button class="btn btn-sm btn-ghost dash-status-btn" data-dash-status="inactive" onclick="window.setDashStatusFilter('inactive')" style="font-size:0.7rem;padding:0.25rem 0.6rem">Inactive</button>
+        <button class="btn btn-sm btn-ghost dash-status-btn" data-dash-status="all" onclick="window.setDashStatusFilter('all')" style="font-size:0.7rem;padding:0.25rem 0.6rem">All</button>
+      </div>
     </div>
     <div class="tab-content">
       <div class="export-row">
@@ -752,12 +757,7 @@
       <div class="dash-chart" id="dash-chart"></div>
       <div class="section-header" style="display:flex;justify-content:space-between;align-items:center">
         <div class="section-title">Recent Logs</div>
-        <div id="dash-week-nav" style="display:flex;align-items:center;gap:0.4rem">
-          <button class="btn btn-sm btn-ghost" id="dash-week-all" style="font-size:0.65rem;padding:0.2rem 0.4rem">All</button>
-          <button class="btn btn-sm btn-ghost" id="dash-week-prev" style="font-size:0.7rem;padding:0.2rem 0.4rem">◀</button>
-          <span id="dash-week-label" style="font-size:0.65rem;color:var(--subtext);min-width:140px;text-align:center;white-space:nowrap"></span>
-          <button class="btn btn-sm btn-ghost" id="dash-week-next" style="font-size:0.7rem;padding:0.2rem 0.4rem">▶</button>
-        </div>
+        <select id="dash-week-select" class="filter-select" style="font-size:0.7rem;padding:0.3rem 0.5rem;max-width:200px"></select>
       </div>
       <div id="dash-logs"></div>
     </div>
@@ -1190,13 +1190,21 @@
 
   function updateSelects() {
     const logSel = document.getElementById('log-peptide-select')
-    const dashSel = document.getElementById('dash-filter')
     const activePeptides = peptides.filter(p => p.active)
     logSel.innerHTML = activePeptides.length === 0
       ? '<option value="">— Add a peptide first —</option>'
       : activePeptides.map(p => `<option value="${p.id}" data-unit="${p.unit}" data-site="${p.default_site || 'stomach_left'}">${p.name}</option>`).join('')
+    updateDashFilterSelect()
+  }
+
+  function updateDashFilterSelect() {
+    const dashSel = document.getElementById('dash-filter')
+    const prevVal = dashSel.value
+    const dashPeps = dashStatusFilter === 'all' ? peptides : peptides.filter(p => dashStatusFilter === 'active' ? p.active : !p.active)
     dashSel.innerHTML = '<option value="">All peptides</option>' +
-      peptides.map(p => `<option value="${p.id}">${p.name}</option>`).join('')
+      dashPeps.map(p => `<option value="${p.id}">${p.name}${dashStatusFilter === 'all' ? (p.active ? '' : ' (inactive)') : ''}</option>`).join('')
+    // Restore selection if still valid
+    if (dashPeps.some(p => p.id === prevVal)) dashSel.value = prevVal
   }
 
   // ==================== STACKS TAB ====================
@@ -1720,6 +1728,19 @@
   // ==================== STACKBOARD TAB ====================
   let dashWeekOffset = 0 // 0 = current week, -1 = last week, null = all weeks
   let dashStatFilter = 'all' // 'all', 'taken', or 'skipped'
+  let dashStatusFilter = 'active' // 'active', 'inactive', 'all'
+
+  window.setDashStatusFilter = function(filter) {
+    dashStatusFilter = filter
+    document.querySelectorAll('.dash-status-btn').forEach(btn => {
+      const isActive = btn.dataset.dashStatus === filter
+      btn.classList.toggle('active', isActive)
+      if (isActive) { btn.classList.remove('btn-ghost') } else { btn.classList.add('btn-ghost') }
+    })
+    // Clear peptide filter since the list changes
+    document.getElementById('dash-filter').value = ''
+    renderStackboard()
+  }
 
   window.setStatFilter = function(filter) {
     dashStatFilter = dashStatFilter === filter ? 'all' : filter // toggle
@@ -1794,18 +1815,25 @@
 
   async function renderStackboard() {
     const filterId = document.getElementById('dash-filter').value
-    let query = supabase.from('dose_logs').select('*, peptides(name)')
+    let query = supabase.from('dose_logs').select('*, peptides(name, active)')
       .order('logged_at', { ascending: false }).limit(500)
     if (filterId) query = query.eq('peptide_id', filterId)
     const { data } = await query
-    const logs = data || []
+    let logs = data || []
+
+    // Filter logs by active/inactive status
+    if (dashStatusFilter !== 'all' && !filterId) {
+      const statusPepIds = new Set(peptides.filter(p => dashStatusFilter === 'active' ? p.active : !p.active).map(p => p.id))
+      logs = logs.filter(l => statusPepIds.has(l.peptide_id))
+    }
 
     const taken = logs.filter(l => l.status === 'taken').length
     const skipped = logs.filter(l => l.status === 'skipped').length
     const total = taken + skipped
 
     // Compliance = doses taken / total scheduled doses (capped at 100%)
-    const totalScheduled = countScheduledDoses(peptides, filterId)
+    const compPeps = dashStatusFilter === 'all' ? peptides : peptides.filter(p => dashStatusFilter === 'active' ? p.active : !p.active)
+    const totalScheduled = countScheduledDoses(compPeps, filterId)
     const compliance = totalScheduled > 0 ? Math.min(100, Math.round((taken / totalScheduled) * 100)) : 0
 
     document.getElementById('dash-total').textContent = total
@@ -1818,17 +1846,19 @@
     window._dashLogs = logs
     updateStatFilterUI()
 
-    // Active stack with weeks — clickable to filter entire dashboard
-    const activePeps = peptides.filter(p => p.active)
+    // Stack list with weeks — clickable to filter entire dashboard
+    const stackPeps = dashStatusFilter === 'all' ? peptides : peptides.filter(p => dashStatusFilter === 'active' ? p.active : !p.active)
     const stackContainer = document.getElementById('dash-active-stack')
-    if (activePeps.length > 0) {
+    updateDashFilterSelect()
+    if (stackPeps.length > 0) {
       const today = new Date(); today.setHours(0,0,0,0)
       const isFiltered = !!filterId
+      const stackLabel = dashStatusFilter === 'active' ? 'Active Stack' : dashStatusFilter === 'inactive' ? 'Inactive Stack' : 'All Peptides'
       stackContainer.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">' +
-        '<div style="font-weight:700;font-size:0.9rem">Active Stack</div>' +
+        `<div style="font-weight:700;font-size:0.9rem">${stackLabel}</div>` +
         (isFiltered ? '<button class="btn btn-sm btn-ghost" onclick="window.clearDashFilter()" style="font-size:0.7rem;padding:0.2rem 0.5rem">Show All</button>' : '') +
         '</div>' +
-        activePeps.map(p => {
+        stackPeps.map(p => {
           let weeksText = '—'
           if (p.start_date) {
             const start = new Date(p.start_date + 'T00:00:00')
@@ -1908,13 +1938,24 @@
       })
     }
 
-    // Update week nav label & button states
-    document.getElementById('dash-week-label').textContent = formatWeekLabel(dashWeekOffset)
-    document.getElementById('dash-week-next').disabled = dashWeekOffset === null || dashWeekOffset >= 0
-    document.getElementById('dash-week-prev').disabled = dashWeekOffset === null
-    const allBtn = document.getElementById('dash-week-all')
-    allBtn.style.background = dashWeekOffset === null ? 'var(--accent)' : ''
-    allBtn.style.color = dashWeekOffset === null ? '#fff' : ''
+    // Populate week dropdown from log data
+    const weekSelect = document.getElementById('dash-week-select')
+    const oldVal = dashWeekOffset === null ? 'all' : String(dashWeekOffset)
+    // Find the range of weeks with data
+    let minOffset = 0
+    if (logs.length > 0) {
+      const oldest = new Date(logs[logs.length - 1].logged_at)
+      const now = new Date(); now.setHours(0,0,0,0)
+      const thisWeekStart = new Date(now); thisWeekStart.setDate(now.getDate() - now.getDay())
+      const oldestWeekStart = new Date(oldest); oldestWeekStart.setDate(oldest.getDate() - oldest.getDay()); oldestWeekStart.setHours(0,0,0,0)
+      minOffset = Math.floor((oldestWeekStart - thisWeekStart) / (7 * 86400000))
+    }
+    let opts = '<option value="all">All Weeks</option>'
+    for (let i = 0; i >= minOffset; i--) {
+      opts += `<option value="${i}">${formatWeekLabel(i)}</option>`
+    }
+    weekSelect.innerHTML = opts
+    weekSelect.value = oldVal
 
     const filterLabel = dashStatFilter === 'taken' ? 'taken ' : dashStatFilter === 'skipped' ? 'skipped ' : ''
     const logsContainer = document.getElementById('dash-logs')
@@ -2001,11 +2042,9 @@
 
   document.getElementById('dash-filter').addEventListener('change', renderStackboard)
 
-  // Week navigation for Recent Logs
-  document.getElementById('dash-week-prev').addEventListener('click', () => { if (dashWeekOffset !== null) { dashWeekOffset--; renderDashLogs() } })
-  document.getElementById('dash-week-next').addEventListener('click', () => { if (dashWeekOffset !== null && dashWeekOffset < 0) { dashWeekOffset++; renderDashLogs() } })
-  document.getElementById('dash-week-all').addEventListener('click', () => {
-    dashWeekOffset = dashWeekOffset === null ? 0 : null  // toggle between All and This Week
+  // Week dropdown for Recent Logs
+  document.getElementById('dash-week-select').addEventListener('change', function() {
+    dashWeekOffset = this.value === 'all' ? null : parseInt(this.value)
     renderDashLogs()
   })
 
