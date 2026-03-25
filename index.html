@@ -658,7 +658,7 @@
         <div class="card-sub">Signed in as</div>
         <div class="card-title" id="profile-email" style="margin-top:0.25rem; font-size:0.95rem;"></div>
       </div>
-      <button class="btn btn-secondary" id="signout-btn" style="margin-top:0.5rem;position:relative;z-index:20;-webkit-touch-callout:none" ontouchend="this.click()">Sign Out</button>
+      <button class="btn btn-danger" id="signout-btn" style="margin-top:0.5rem">Sign Out</button>
       <div class="profile-info">Simple Pep Tracker v2.0<br>Track your Stack<br>Data stored securely in Supabase</div>
     </div>
   </div>
@@ -936,18 +936,14 @@
     btn.textContent = isSignUp ? 'Create Account' : 'Sign In'
   })
 
-  const signoutBtn = document.getElementById('signout-btn')
-  signoutBtn.addEventListener('click', async (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    signoutBtn.disabled = true
-    signoutBtn.textContent = 'Signing out...'
-    await supabase.auth.signOut()
-    window.location.reload()
-  })
-  signoutBtn.addEventListener('touchend', async (e) => {
-    e.preventDefault()
-    signoutBtn.click()
+  document.getElementById('signout-btn').addEventListener('click', async () => {
+    try {
+      await supabase.auth.signOut()
+    } catch(e) {
+      console.error('Sign out error:', e)
+    }
+    // Force clear and reload regardless
+    window.location.href = window.location.origin
   })
 
   function setAuthMessage(msg, type) {
