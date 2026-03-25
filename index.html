@@ -658,7 +658,7 @@
         <div class="card-sub">Signed in as</div>
         <div class="card-title" id="profile-email" style="margin-top:0.25rem; font-size:0.95rem;"></div>
       </div>
-      <button class="btn btn-secondary" id="signout-btn" style="margin-top:0.5rem">Sign Out</button>
+      <button class="btn btn-secondary" id="signout-btn" style="margin-top:0.5rem;position:relative;z-index:20;-webkit-touch-callout:none" ontouchend="this.click()">Sign Out</button>
       <div class="profile-info">Simple Pep Tracker v2.0<br>Track your Stack<br>Data stored securely in Supabase</div>
     </div>
   </div>
@@ -936,7 +936,19 @@
     btn.textContent = isSignUp ? 'Create Account' : 'Sign In'
   })
 
-  document.getElementById('signout-btn').addEventListener('click', () => supabase.auth.signOut())
+  const signoutBtn = document.getElementById('signout-btn')
+  signoutBtn.addEventListener('click', async (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    signoutBtn.disabled = true
+    signoutBtn.textContent = 'Signing out...'
+    await supabase.auth.signOut()
+    window.location.reload()
+  })
+  signoutBtn.addEventListener('touchend', async (e) => {
+    e.preventDefault()
+    signoutBtn.click()
+  })
 
   function setAuthMessage(msg, type) {
     const el = document.getElementById('auth-message')
@@ -1017,7 +1029,7 @@
       d.setDate(startOfWeek.getDate() + i)
       const dayName = DAY_NAMES[d.getDay()]
       const isToday = d.toDateString() === today.toDateString()
-      const scheduled = peptides.filter(p => p.active && p.schedule_days && p.schedule_days.includes(dayName) && isWithinDateRange(p, d))
+      const scheduled = peptides.filter(p => p.active && isScheduledForDay(p, dayName) && isWithinDateRange(p, d))
       html += `<div class="week-day-card${isToday ? ' today' : ''}">
         <div class="week-day-name">${dayName}</div>
         <div class="week-day-num">${d.getDate()}</div>
@@ -1025,6 +1037,12 @@
       </div>`
     }
     container.innerHTML = html
+  }
+
+  function isScheduledForDay(peptide, dayName) {
+    // If no schedule days set (null or empty), treat as every day
+    if (!peptide.schedule_days || peptide.schedule_days.length === 0) return true
+    return peptide.schedule_days.includes(dayName)
   }
 
   function isWithinDateRange(peptide, date) {
@@ -1043,7 +1061,7 @@
     const dayName = DAY_NAMES[today.getDay()]
     const todayStr = today.toISOString().slice(0,10)
 
-    const scheduled = peptides.filter(p => p.active && p.schedule_days && p.schedule_days.includes(dayName) && isWithinDateRange(p, today))
+    const scheduled = peptides.filter(p => p.active && isScheduledForDay(p, dayName) && isWithinDateRange(p, today))
 
     // Get today's logs
     const todayStart = new Date(today); todayStart.setHours(0,0,0,0)
